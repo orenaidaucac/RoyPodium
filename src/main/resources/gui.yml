@@ -4,7 +4,7 @@
 # Every GUI title, slot, material, item name, lore, sound, and label can be
 # customized or translated here without touching code.
 # Supports MiniMessage, Hex (&#RRGGBB), and Legacy (&a, §a) mixed in one line.
-config-version: 2
+config-version: 3
 
 sounds:
   click: "UI_BUTTON_CLICK"
@@ -22,6 +22,7 @@ labels:
   enabled-true: "&aEnabled"
   enabled-false: "&cDisabled"
   no-schedule: "&cNone"
+  no-upcoming-run: "&7No upcoming run"
 
 menus:
   main:
@@ -257,7 +258,7 @@ menus:
         name: "&eFrequency"
         lore:
           - "&7Current: &e{frequency}"
-          - "&eClick to cycle (DAILY/WEEKLY/MONTHLY/INTERVAL)"
+          - "&eClick to cycle (DAILY/WEEKLY/MONTHLY/INTERVAL/SPECIFIC_DATES)"
       time-start:
         slot: 14
         material: "CLOCK"
@@ -271,13 +272,45 @@ menus:
         name: "&eFrequency Parameter"
         lore:
           - "&7Current: &f{extra}"
-          - "&7(Days for WEEKLY, Day for MONTHLY, Duration for INTERVAL)"
-          - "&eClick to edit in chat"
+          - "&7(Days for WEEKLY, Day for MONTHLY,"
+          - "&7Duration for INTERVAL, Dates for SPECIFIC_DATES)"
+          - "&eClick to configure"
       back:
         slot: 22
         material: "ARROW"
         name: "&cBack"
         lore: []
+
+  schedule-dates:
+    title: "&b&lDates: &f{id}"
+    rows: 6
+    add-slot: 49
+    policy-slot: 47
+    back-slot: 45
+    entry-material: "PAPER"
+    entry-name: "&eDate/Time: &f{pattern}"
+    entry-lore:
+      - "&7Supports YYYY-MM-DD HH:mm:ss"
+      - "&7and '*' wildcards."
+      - ""
+      - "&cShift-Right-Click &7to delete"
+    add-item:
+      material: "EMERALD"
+      name: "&a&l+ Add Date/Time"
+      lore:
+        - "&7Enter date & time in chat"
+        - "&7e.g. 2026-12-25 20:00:00 or *-01-01 00:00:00"
+    policy-item:
+      material: "COMPARATOR"
+      name: "&eShort-Month Policy"
+      lore:
+        - "&7Current: &f{short_month_policy}"
+        - "&7Controls days 29-31 in shorter months."
+        - "&eClick to toggle (SKIP_MONTH / LAST_DAY)"
+    back-item:
+      material: "ARROW"
+      name: "&cBack"
+      lore: []
 
   queue-menu:
     title: "&a&lRoyPodium &8| &7Offline Queue"

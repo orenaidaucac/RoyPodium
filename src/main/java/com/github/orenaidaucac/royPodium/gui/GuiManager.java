@@ -8,9 +8,11 @@ import com.github.orenaidaucac.royPodium.podium.PodiumManager;
 import com.github.orenaidaucac.royPodium.podium.TiePolicy;
 import com.github.orenaidaucac.royPodium.queue.PendingReward;
 import com.github.orenaidaucac.royPodium.queue.QueueManager;
+import com.github.orenaidaucac.royPodium.scheduler.DatePatternSpec;
 import com.github.orenaidaucac.royPodium.scheduler.MissedPolicy;
 import com.github.orenaidaucac.royPodium.scheduler.ScheduleSpec;
 import com.github.orenaidaucac.royPodium.scheduler.SchedulerAdapter;
+import com.github.orenaidaucac.royPodium.scheduler.ShortMonthPolicy;
 import com.github.orenaidaucac.royPodium.util.ColorUtil;
 import com.github.orenaidaucac.royPodium.util.TimeUtil;
 import dev.triumphteam.gui.builder.item.ItemBuilder;
@@ -529,8 +531,90 @@ public final class GuiManager {
                     openScheduleEdit(player, scheduleId);
                 }, () -> openScheduleEdit(player, scheduleId)));
 
+        setConfiguredItem(gui, "menus.schedule-edit.items.extra", 16, Material.BOOK, "&eFrequency Parameter", ph,
+                e -> {
+                    if (spec.getFrequency() == ScheduleSpec.Frequency.SPECIFIC_DATES) {
+                        playSound(player, "click");
+                        openScheduleDates(player, scheduleId);
+                    } else {
+                        playSound(player, "click");
+                    }
+                });
+
         setConfiguredItem(gui, "menus.schedule-edit.items.back", 22, Material.ARROW, "&cBack", ph,
                 e -> { playSound(player, "click"); openScheduleList(player); });
+
+        openGui(player, gui);
+    }
+
+    public void openScheduleDates(Player player, String scheduleId) {
+        if (!checkAccess(player)) return;
+        ScheduleSpec spec = configManager.getSchedules().get(scheduleId);
+        if (spec == null) {
+            openScheduleList(player);
+            return;
+        }
+        GuiConfig cfg = configManager.getGuiConfig();
+        int rows = cfg.getRows("schedule-dates", 6);
+        Gui gui = createBaseGui(cfg.getTitle("schedule-dates", "&b&lDates: &f{id}", Map.of("id", scheduleId)), rows);
+
+        Material mat = cfg.getMaterial("menus.schedule-dates.entry-material", Material.PAPER);
+        String nameTpl = cfg.getRawString("menus.schedule-dates.entry-name", "&eDate/Time: &f{pattern}");
+        List<String> loreTpl = cfg.getStringList("menus.schedule-dates.entry-lore");
+
+        int slot = 0;
+        int maxSlot = (rows - 1) * 9;
+        List<DatePatternSpec> current = spec.getDatePatterns();
+        for (int i = 0; i < current.size(); i++) {
+            if (slot >= maxSlot) break;
+            final int index = i;
+            DatePatternSpec pat = current.get(i);
+            Map<String, String> ph = Map.of("pattern", pat.getRaw());
+            gui.setItem(slot++, buildGuiItem(mat,
+                    ColorUtil.colorize(GuiConfig.apply(nameTpl, ph)),
+                    loreTpl.stream().map(l -> ColorUtil.colorize(GuiConfig.apply(l, ph))).toList(),
+                    e -> {
+                        if (e.getClick() == ClickType.SHIFT_RIGHT) {
+                            List<DatePatternSpec> updated = new ArrayList<>(current);
+                            updated.remove(index);
+                            configManager.saveSchedule(copyScheduleDates(spec, updated, spec.getShortMonthPolicy()));
+                            playSound(player, "delete");
+                            openScheduleDates(player, scheduleId);
+                        }
+                    }));
+        }
+
+        int policySlot = cfg.getInt("menus.schedule-dates.policy-slot", 47);
+        Map<String, String> policyPh = Map.of("short_month_policy", spec.getShortMonthPolicy().name());
+        setConfiguredItem(gui, "menus.schedule-dates.policy-item", policySlot, Material.COMPARATOR, "&eShort-Month Policy", policyPh,
+                e -> {
+                    ShortMonthPolicy next = spec.getShortMonthPolicy() == ShortMonthPolicy.SKIP_MONTH
+                            ? ShortMonthPolicy.LAST_DAY
+                            : ShortMonthPolicy.SKIP_MONTH;
+                    configManager.saveSchedule(copyScheduleDates(spec, current, next));
+                    playSound(player, "save");
+                    openScheduleDates(player, scheduleId);
+                });
+
+        int addSlot = cfg.getInt("menus.schedule-dates.add-slot", 49);
+        setConfiguredItem(gui, "menus.schedule-dates.add-item", addSlot, Material.EMERALD, "&a&l+ Add Date/Time", Map.of(),
+                e -> promptInput(player, raw -> {
+                    DatePatternSpec.ParseResult pr = DatePatternSpec.parse(raw);
+                    if (!pr.isValid()) {
+                        playSound(player, "error");
+                        openScheduleDates(player, scheduleId);
+                        return;
+                    }
+                    List<DatePatternSpec> updated = new ArrayList<>(current);
+                    updated.add(pr.spec());
+                    configManager.saveSchedule(copyScheduleDates(spec, updated, spec.getShortMonthPolicy()));
+                    playSound(player, "save");
+                    openScheduleDates(player, scheduleId);
+                }, () -> openScheduleDates(player, scheduleId)));
+
+        int backSlot = cfg.getInt("menus.schedule-dates.back-slot", 45);
+        setConfiguredItem(gui, "menus.schedule-dates.back-item", backSlot, Material.ARROW, "&cBack", Map.of(),
+                e -> { playSound(player, "click"); openScheduleEdit(player, scheduleId); });
 
         openGui(player, gui);
     }
@@ -747,13 +831,17 @@ public final class GuiManager {
             case WEEKLY -> String.valueOf(spec.getDaysOfWeek());
             case MONTHLY -> spec.getDayOfMonth() < 0 ? "LAST" : String.valueOf(spec.getDayOfMonth());
             case INTERVAL -> TimeUtil.formatDuration(spec.getInterval());
+            case SPECIFIC_DATES -> spec.getDatePatterns().size() + " date(s)";
         };
+        String nextRunStr = next == null
+                ? configManager.getGuiConfig().getString("labels.no-upcoming-run", "&7No upcoming run")
+                : TimeUtil.formatDuration(Duration.between(now, next));
         return Map.of(
                 "id", spec.getId(),
                 "timezone", spec.getTimezone().getId(),
                 "frequency", spec.getFrequency().name(),
                 "time_start", spec.getTimeStart().toString(),
-                "next_run", TimeUtil.formatDuration(Duration.between(now, next)),
+                "next_run", nextRunStr,
                 "extra", extra
         );
     }
@@ -799,6 +887,23 @@ public final class GuiManager {
                 .dayOfMonth(src.getDayOfMonth())
                 .interval(src.getInterval())
                 .missedPolicy(src.getMissedPolicy())
+                .datePatterns(src.getDatePatterns())
+                .shortMonthPolicy(src.getShortMonthPolicy())
+                .build();
+    }
+
+    private ScheduleSpec copyScheduleDates(ScheduleSpec src, List<DatePatternSpec> patterns, ShortMonthPolicy shortMonthPolicy) {
+        return ScheduleSpec.builder()
+                .id(src.getId())
+                .timezone(src.getTimezone())
+                .frequency(src.getFrequency())
+                .timeStart(src.getTimeStart())
+                .daysOfWeek(src.getDaysOfWeek())
+                .dayOfMonth(src.getDayOfMonth())
+                .interval(src.getInterval())
+                .missedPolicy(src.getMissedPolicy())
+                .datePatterns(List.copyOf(patterns))
+                .shortMonthPolicy(shortMonthPolicy)
                 .build();
     }
 }

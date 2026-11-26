@@ -94,18 +94,25 @@ public final class CommandAliasManager {
     }
 
     private void unregisterFromMap(CommandMap commandMap) {
-        Map<String, Command> known = getKnownCommands(commandMap);
+        Map<String, Command> known = getMutableKnownCommands(commandMap);
         if (known != null) {
-            Iterator<Map.Entry<String, Command>> it = known.entrySet().iterator();
-            while (it.hasNext()) {
-                Map.Entry<String, Command> entry = it.next();
-                if (entry.getValue() instanceof RoyPodiumAliasCommand) {
-                    it.remove();
+            try {
+                Iterator<Map.Entry<String, Command>> it = known.entrySet().iterator();
+                while (it.hasNext()) {
+                    Map.Entry<String, Command> entry = it.next();
+                    if (entry.getValue() instanceof RoyPodiumAliasCommand) {
+                        it.remove();
+                    }
                 }
+            } catch (UnsupportedOperationException ignored) {
+                // Server returned an unmodifiable view; fall back to Command#unregister below
             }
         }
         for (RoyPodiumAliasCommand cmd : registeredAliases) {
-            cmd.unregister(commandMap);
+            try {
+                cmd.unregister(commandMap);
+            } catch (Exception ignored) {
+            }
         }
         registeredAliases.clear();
     }
@@ -125,6 +132,25 @@ public final class CommandAliasManager {
                 return cm;
             }
         } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Command> getMutableKnownCommands(CommandMap commandMap) {
+        Class<?> cls = commandMap.getClass();
+        while (cls != null) {
+            try {
+                Field f = cls.getDeclaredField("knownCommands");
+                f.setAccessible(true);
+                if (f.get(commandMap) instanceof Map<?, ?> map) {
+                    return (Map<String, Command>) map;
+                }
+            } catch (NoSuchFieldException ignored) {
+                cls = cls.getSuperclass();
+            } catch (Exception ignored) {
+                break;
+            }
         }
         return null;
     }

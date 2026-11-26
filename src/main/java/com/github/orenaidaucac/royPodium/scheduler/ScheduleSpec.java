@@ -26,7 +26,8 @@ public final class ScheduleSpec {
         DAILY,
         WEEKLY,
         MONTHLY,
-        INTERVAL
+        INTERVAL,
+        SPECIFIC_DATES
     }
 
     private final String id;
@@ -38,9 +39,14 @@ public final class ScheduleSpec {
     private final int dayOfMonth;
     private final Duration interval;
     private final MissedPolicy missedPolicy;
+    @Builder.Default
+    private final List<DatePatternSpec> datePatterns = List.of();
+    @Builder.Default
+    private final ShortMonthPolicy shortMonthPolicy = ShortMonthPolicy.SKIP_MONTH;
 
     /**
-     * Computes the next scheduled execution instant strictly after {@code after}.
+     * Computes the next scheduled execution instant strictly after {@code after},
+     * or {@code null} if no future execution exists (e.g. all {@code SPECIFIC_DATES} are in the past).
      */
     public Instant nextExecutionAfter(Instant after) {
         ZonedDateTime zdtAfter = after.atZone(timezone);
@@ -49,6 +55,7 @@ public final class ScheduleSpec {
             case WEEKLY -> nextWeekly(zdtAfter, after);
             case MONTHLY -> nextMonthly(zdtAfter, after);
             case INTERVAL -> nextInterval(zdtAfter, after);
+            case SPECIFIC_DATES -> nextSpecificDate(after);
         };
     }
 
@@ -64,13 +71,27 @@ public final class ScheduleSpec {
         int safety = Math.max(1, maxScan);
         for (int i = 0; i < safety; i++) {
             Instant next = nextExecutionAfter(cursor);
-            if (next.isAfter(now)) {
+            if (next == null || next.isAfter(now)) {
                 break;
             }
             missed.add(next);
             cursor = next;
         }
         return missed;
+    }
+
+    private Instant nextSpecificDate(Instant after) {
+        if (datePatterns == null || datePatterns.isEmpty()) {
+            return null;
+        }
+        Instant earliest = null;
+        for (DatePatternSpec pattern : datePatterns) {
+            Instant candidate = pattern.nextExecutionAfter(after, timezone, shortMonthPolicy);
+            if (candidate != null && (earliest == null || candidate.isBefore(earliest))) {
+                earliest = candidate;
+            }
+        }
+        return earliest;
     }
 
     private Instant nextDaily(ZonedDateTime zdtAfter, Instant after) {

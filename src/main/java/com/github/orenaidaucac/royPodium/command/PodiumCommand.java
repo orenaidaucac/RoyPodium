@@ -145,7 +145,15 @@ public final class PodiumCommand implements CommandExecutor, TabCompleter {
         for (PodiumDefinition def : configManager.getPodiums().values()) {
             if (!def.isEnabled()) continue;
             ScheduleSpec spec = configManager.getSchedules().get(def.getScheduleId());
-            String nextStr = spec == null ? "No schedule" : TimeUtil.formatDuration(Duration.between(now, spec.nextExecutionAfter(now)));
+            String nextStr;
+            if (spec == null) {
+                nextStr = "No schedule";
+            } else {
+                Instant next = spec.nextExecutionAfter(now);
+                nextStr = next == null
+                        ? configManager.getGuiConfig().getRawString("labels.no-upcoming-run", "No upcoming run")
+                        : TimeUtil.formatDuration(Duration.between(now, next));
+            }
             sender.sendMessage(msgs.format("status.schedule-entry", "&7- &f{podium} &8(&7{schedule}&8): &eNext in {next}",
                     Map.of("podium", def.getId(), "schedule", def.getScheduleId(), "next", nextStr)));
         }

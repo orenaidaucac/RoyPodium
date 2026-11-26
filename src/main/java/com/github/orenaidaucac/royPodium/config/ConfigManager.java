@@ -3,8 +3,10 @@ package com.github.orenaidaucac.royPodium.config;
 import com.github.orenaidaucac.royPodium.podium.ConditionSpec;
 import com.github.orenaidaucac.royPodium.podium.PodiumDefinition;
 import com.github.orenaidaucac.royPodium.podium.TiePolicy;
+import com.github.orenaidaucac.royPodium.scheduler.DatePatternSpec;
 import com.github.orenaidaucac.royPodium.scheduler.MissedPolicy;
 import com.github.orenaidaucac.royPodium.scheduler.ScheduleSpec;
+import com.github.orenaidaucac.royPodium.scheduler.ShortMonthPolicy;
 import com.github.orenaidaucac.royPodium.util.AtomicFileUtil;
 import com.github.orenaidaucac.royPodium.util.TimeUtil;
 import lombok.Getter;
@@ -38,7 +40,7 @@ import java.util.logging.Logger;
  */
 public final class ConfigManager {
 
-    private static final int CURRENT_CONFIG_VERSION = 2;
+    private static final int CURRENT_CONFIG_VERSION = 3;
     private static final List<String> CONFIG_FILES = List.of(
             "config.yml", "messages.yml", "schedules.yml", "podiums.yml", "gui.yml"
     );
@@ -275,17 +277,18 @@ public final class ConfigManager {
                 freq = ScheduleSpec.Frequency.valueOf(freqRaw);
             } catch (IllegalArgumentException ex) {
                 warnings.add("[schedules.yml] Key 'schedules." + id + ".frequency' has invalid value '" + freqRaw
-                        + "'. Fix: Use DAILY, WEEKLY, MONTHLY, or INTERVAL. Skipping schedule '" + id + "'.");
+                        + "'. Fix: Use DAILY, WEEKLY, MONTHLY, INTERVAL, or SPECIFIC_DATES. Skipping schedule '" + id + "'.");
                 continue;
             }
 
             String timeRaw = entry.getString("time-start", "00:00:00");
             Optional<LocalTime> parsedTime = TimeUtil.parseLocalTime(timeRaw);
-            if (parsedTime.isEmpty()) {
+            if (parsedTime.isEmpty() && freq != ScheduleSpec.Frequency.SPECIFIC_DATES) {
                 warnings.add("[schedules.yml] Key 'schedules." + id + ".time-start' has invalid time '" + timeRaw
                         + "'. Fix: Use 'HH:mm' or 'HH:mm:ss' (24-hour format, e.g. '20:00:00'). Skipping schedule '" + id + "'.");
                 continue;
             }
+            LocalTime resolvedTime = parsedTime.orElse(LocalTime.MIDNIGHT);
 
             Set<DayOfWeek> days = EnumSet.noneOf(DayOfWeek.class);
             if (freq == ScheduleSpec.Frequency.WEEKLY) {
@@ -334,6 +337,31 @@ public final class ConfigManager {
                 }
             }
 
+            ShortMonthPolicy shortMonthPolicy = ShortMonthPolicy.SKIP_MONTH;
+            List<DatePatternSpec> datePatterns = new ArrayList<>();
+            if (freq == ScheduleSpec.Frequency.SPECIFIC_DATES) {
+                String smpRaw = entry.getString("short-month-policy", "SKIP_MONTH").trim().toUpperCase();
+                try {
+                    shortMonthPolicy = ShortMonthPolicy.valueOf(smpRaw);
+                } catch (IllegalArgumentException ex) {
+                    warnings.add("[schedules.yml] Key 'schedules." + id + ".short-month-policy' has invalid value '" + smpRaw
+                            + "'. Fix: Use SKIP_MONTH or LAST_DAY. Using SKIP_MONTH.");
+                }
+                List<String> rawDates = entry.getStringList("dates");
+                if (rawDates.isEmpty()) {
+                    warnings.add("[schedules.yml] Key 'schedules." + id + ".dates' is empty for SPECIFIC_DATES frequency. Add at least one entry like '2026-12-25 20:00:00'.");
+                }
+                for (String rawDate : rawDates) {
+                    DatePatternSpec.ParseResult pr = DatePatternSpec.parse(rawDate);
+                    if (pr.isValid()) {
+                        datePatterns.add(pr.spec());
+                    } else {
+                        warnings.add("[schedules.yml] Key 'schedules." + id + ".dates' has invalid entry '" + rawDate
+                                + "': " + pr.error() + " Fix: Use 'YYYY-MM-DD HH:mm:ss' (use '*' for wildcards). Skipping invalid entry.");
+                    }
+                }
+            }
+
             MissedPolicy mp = null;
             if (entry.contains("missed-policy")) {
                 mp = parseMissedPolicy(entry.getString("missed-policy"),
@@ -344,11 +372,13 @@ public final class ConfigManager {
                     .id(id)
                     .timezone(tz)
                     .frequency(freq)
-                    .timeStart(parsedTime.get())
+                    .timeStart(resolvedTime)
                     .daysOfWeek(days)
                     .dayOfMonth(dayOfMonth)
                     .interval(interval)
                     .missedPolicy(mp)
+                    .datePatterns(List.copyOf(datePatterns))
+                    .shortMonthPolicy(shortMonthPolicy)
                     .build());
         }
         return map;
@@ -503,6 +533,9 @@ public final class ConfigManager {
             rawSchedules.set(base + ".day-of-month", spec.getDayOfMonth() < 0 ? "LAST" : String.valueOf(spec.getDayOfMonth()));
         } else if (spec.getFrequency() == ScheduleSpec.Frequency.INTERVAL && spec.getInterval() != null) {
             rawSchedules.set(base + ".interval", TimeUtil.formatDuration(spec.getInterval()).replace(" ", ""));
+        } else if (spec.getFrequency() == ScheduleSpec.Frequency.SPECIFIC_DATES) {
+            rawSchedules.set(base + ".short-month-policy", spec.getShortMonthPolicy().name());
+            rawSchedules.set(base + ".dates", spec.getDatePatterns().stream().map(DatePatternSpec::getRaw).toList());
         }
         if (spec.getMissedPolicy() != null) {
             rawSchedules.set(base + ".missed-policy", spec.getMissedPolicy().name());

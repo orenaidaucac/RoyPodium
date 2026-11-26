@@ -107,6 +107,21 @@ Each schedule in `schedules.yml` uses an IANA timezone ID (such as `UTC`, `Ameri
 | `WEEKLY` | `days` (`MONDAY`..`SUNDAY`), `time-start` | Runs every `SUNDAY` at `20:00:00` |
 | `MONTHLY` | `day-of-month` (`1`..`31` or `LAST`), `time-start` | Runs on the `LAST` day of each month |
 | `INTERVAL` | `interval` (`30m`, `1h`, `2h`), `time-start` | Runs every `1h` anchored to `time-start` |
+| `SPECIFIC_DATES` | `dates` (`YYYY-MM-DD HH:mm[:ss]`, supports `*` wildcards) | Runs on exact dates/times or recurring patterns |
+
+#### Specific-Date & Recurring Patterns (`SPECIFIC_DATES`)
+Use `SPECIFIC_DATES` for holiday events, one-time payouts, or custom recurring dates—with multiple date-time entries per schedule:
+
+```yaml
+  special_events:
+    timezone: "UTC"
+    frequency: "SPECIFIC_DATES"
+    short-month-policy: "SKIP_MONTH" # or LAST_DAY for days 29-31 in shorter months
+    dates:
+      - "2026-12-25 20:00:00"        # Exact one-time date & time
+      - "*-01-01 00:00:00"           # Every year on Jan 1 at midnight
+      - "*-*-01 12:00:00"            # 1st of every month at noon
+```
 
 ### Missed Schedule Policy
 If your server was offline when a payout was due, `missed-schedule-policy` (`config.yml` or per-schedule `missed-policy`) controls recovery:
@@ -325,6 +340,7 @@ If `conditions:` are configured on that podium, `/roypodium test <podium> simula
 ## 📝 Update Changelog
 
 ### Latest Update (`2026.1`)
+- **Added** `SPECIFIC_DATES` schedule frequency in `schedules.yml` supporting exact date-times (`YYYY-MM-DD HH:mm:ss`), `*` wildcards for recurring dates, multiple times per day, `short-month-policy` (`SKIP_MONTH` / `LAST_DAY`), DST-safe evaluation, and an in-game GUI date editor (`schedule-dates`).
 - **Added** anonymous **bStats** metrics integration (Plugin ID `35686`, relocated & Folia-safe) with 7 low-cardinality custom charts and full opt-out support.
 - **Added** unlimited dynamic `command-aliases` in `config.yml` with conflict protection, permission/tab-complete parity, and hot-reload support.
 - **Added** unified MiniMessage + Hex + Legacy color engine across all messages, GUI text, and test output, with anti-injection escaping for player names and PlaceholderAPI values.

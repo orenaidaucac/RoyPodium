@@ -133,7 +133,7 @@ public final class ScheduleManager {
             }
             long lastMs = lastExecutedEpochMs.computeIfAbsent(podium.getId(), k -> now.toEpochMilli());
             Instant next = spec.nextExecutionAfter(Instant.ofEpochMilli(lastMs));
-            if (!next.isAfter(now)) {
+            if (next != null && !next.isAfter(now)) {
                 triggerPayout(podium, next);
                 changed = true;
             }

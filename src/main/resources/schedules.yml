@@ -3,11 +3,12 @@
 # ==============================================================================
 # Define unlimited named schedules. Link them to podiums in podiums.yml.
 # Supported frequencies:
-#   DAILY    - Runs once every day at 'time-start'
-#   WEEKLY   - Runs on specific 'days' (MONDAY..SUNDAY) at 'time-start'
-#   MONTHLY  - Runs on 'day-of-month' (1..31 or LAST) at 'time-start'
-#   INTERVAL - Runs every 'interval' (e.g., 30m, 2h) anchored to 'time-start'
-config-version: 1
+#   DAILY          - Runs once every day at 'time-start'
+#   WEEKLY         - Runs on specific 'days' (MONDAY..SUNDAY) at 'time-start'
+#   MONTHLY        - Runs on 'day-of-month' (1..31 or LAST) at 'time-start'
+#   INTERVAL       - Runs every 'interval' (e.g., 30m, 2h) anchored to 'time-start'
+#   SPECIFIC_DATES - Runs on specific date-time entries in 'dates' (supports '*' wildcards)
+config-version: 2
 
 schedules:
   daily_midnight:
@@ -31,3 +32,18 @@ schedules:
     time-start: "00:00:00"
     interval: "1h"
     missed-policy: "SKIP"
+
+  # Example specific-date schedule (one-time events, holidays, or wildcard recurring dates):
+  # Formats: "YYYY-MM-DD HH:mm:ss", "*-MM-DD HH:mm:ss", "*-*-DD HH:mm:ss", or "MM-DD HH:mm:ss"
+  special_events:
+    timezone: "UTC"
+    frequency: "SPECIFIC_DATES"
+    # Policy when a recurring day (29, 30, 31) is missing in a shorter month (e.g. Feb 30):
+    #   SKIP_MONTH - Skip that month
+    #   LAST_DAY   - Run on the last valid day of that month (e.g. Feb 28/29)
+    short-month-policy: "SKIP_MONTH"
+    missed-policy: "RUN_LATEST"
+    dates:
+      - "2026-12-25 20:00:00"
+      - "*-01-01 00:00:00"
+      - "*-*-01 12:00:00"
