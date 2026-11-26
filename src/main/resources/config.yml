@@ -1,0 +1,74 @@
+# ==============================================================================
+# RoyPodium - Main Configuration (config.yml)
+# ==============================================================================
+# Do NOT edit config-version manually. It is used for automatic config upgrades.
+config-version: 2
+
+# Unlimited custom command aliases for /roypodium (in addition to /podium).
+# Applied immediately on /roypodium reload without restarting the server.
+# Conflicting aliases owned by other plugins are safely skipped with a warning.
+command-aliases:
+  - "toprewards"
+
+settings:
+  # Fallback IANA timezone used when a schedule omits its own timezone.
+  # Examples: "UTC", "America/New_York", "Europe/London", "Asia/Ho_Chi_Minh"
+  default-timezone: "UTC"
+
+  # What to do if the server was offline when a scheduled payout should have run:
+  # - SKIP: Ignore missed payouts and wait for the next scheduled time.
+  # - RUN_LATEST: Execute the most recent missed payout once on startup/reload.
+  # - RUN_ALL: Execute missed payouts up to 'max-catchup-runs'.
+  missed-schedule-policy: "RUN_LATEST"
+
+  # Maximum number of missed runs to catch up when missed-schedule-policy is RUN_ALL.
+  max-catchup-runs: 3
+
+  # Placeholder values treated as empty/unresolved (case-insensitive).
+  # If a player placeholder returns one of these, that rank slot is skipped.
+  invalid-placeholder-values:
+    - ""
+    - "null"
+    - "none"
+    - "N/A"
+    - "---"
+    - "?"
+
+dispatch:
+  # Maximum number of console commands executed per dispatch cycle.
+  # Lower values prevent TPS spikes when rewarding large leaderboards.
+  commands-per-tick: 5
+
+  # How often (in ticks, 20 ticks = 1 second) the dispatcher processes commands.
+  interval-ticks: 1
+
+queue:
+  # How long offline pending rewards remain valid before expiring.
+  # Supports: s (seconds), m (minutes), h (hours), d (days), w (weeks), or "0" for never.
+  expiration: "7d"
+
+  # Delay (in ticks) after a player joins before delivering their pending rewards.
+  join-delay-ticks: 20
+
+  # Whether to notify players in chat when pending offline rewards are delivered.
+  notify-on-join: true
+
+# ==============================================================================
+# Custom Subcommands (/roypodium <subcommand> or /podium <subcommand>)
+# ==============================================================================
+# Add unlimited custom subcommands here.
+# Available placeholders in commands/messages: {sender}, {uuid}
+custom-subcommands:
+  rewards:
+    permission: "roypodium.use"
+    description: "View information about scheduled leaderboard rewards."
+    usage: "/podium rewards"
+    messages:
+      - "&8&m----------------------------------------"
+      - "&6&lRoyPodium &7- &fLeaderboard Rewards"
+      - "&7Top players on server leaderboards receive automatic"
+      - "&7rewards at scheduled times. Offline players receive"
+      - "&7their rewards as soon as they log back in!"
+      - "&8&m----------------------------------------"
+    console-commands: []
+    player-commands: []

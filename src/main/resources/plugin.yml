@@ -1,0 +1,46 @@
+name: RoyPodium
+version: '${project.version}'
+main: com.github.orenaidaucac.royPodium.RoyPodium
+api-version: '1.21'
+folia-supported: true
+authors:
+  - orenaidaucac
+description: Automated scheduled leaderboard reward plugin using PlaceholderAPI.
+softdepend:
+  - PlaceholderAPI
+
+commands:
+  roypodium:
+    description: Main RoyPodium command.
+    aliases:
+      - podium
+    usage: /<command> help
+
+permissions:
+  roypodium.use:
+    description: Allows using basic RoyPodium commands.
+    default: true
+  roypodium.admin:
+    description: Full administrative access to RoyPodium commands and GUI editor.
+    default: op
+    children:
+      roypodium.reload: true
+      roypodium.test: true
+      roypodium.queue: true
+      roypodium.editor: true
+      roypodium.status: true
+  roypodium.reload:
+    description: Allows reloading RoyPodium configuration.
+    default: op
+  roypodium.test:
+    description: Allows running immediate simulated or live payout tests.
+    default: op
+  roypodium.queue:
+    description: Allows inspecting and managing pending offline reward queues.
+    default: op
+  roypodium.editor:
+    description: Allows opening the in-game TriumphGUI editor.
+    default: op
+  roypodium.status:
+    description: Allows viewing RoyPodium status and next scheduled payouts.
+    default: op

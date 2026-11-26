@@ -1,0 +1,69 @@
+# ==============================================================================
+# RoyPodium - Messages Configuration (messages.yml)
+# ==============================================================================
+# Supports MiniMessage (<gold>, <gradient:#ff0000:#00ff00>), Hex (&#RRGGBB),
+# and Legacy (&a, §a, &l) mixed together on the same line.
+config-version: 2
+
+prefix: "&8[&6RoyPodium&8] &r"
+
+general:
+  no-permission: "{prefix}&cYou do not have permission to use this command."
+  players-only: "{prefix}&cOnly in-game players can use this command."
+  unknown-subcommand: "{prefix}&cUnknown subcommand. Use &e/{label} help &cfor a list of commands."
+  reloaded: "{prefix}&aConfiguration reloaded successfully in &e{ms}ms&a."
+  reload-failed: "{prefix}&cReload completed with configuration warnings. Check console for details."
+  papi-missing: "{prefix}&cPlaceholderAPI is not installed! Leaderboard payouts are paused until PlaceholderAPI is available."
+
+help:
+  header: "&8&m----------&r &6&lRoyPodium Help &8&m----------"
+  footer: "&8&m----------------------------------------"
+  lines:
+    - "&e/{label} help &7- Show this help message"
+    - "&e/{label} status &7- View plugin & schedule status"
+    - "&e/{label} editor &7- Open the in-game GUI editor"
+    - "&e/{label} test <podium|all> [simulate|execute] &7- Test a podium payout"
+    - "&e/{label} queue list [page] &7- List players with pending rewards"
+    - "&e/{label} queue inspect <player|uuid> &7- View pending rewards for a player"
+    - "&e/{label} queue clear <player|uuid|all> &7- Clear pending rewards"
+    - "&e/{label} reload &7- Reload all configuration files"
+  custom-line: "&e/{label} {name} &7- {description}"
+
+status:
+  header: "&8&m----------&r &6&lRoyPodium Status &8&m----------"
+  papi-line: "&7PlaceholderAPI: {state}"
+  podiums-line: "&7Loaded Podiums: &e{enabled}&7/&e{total}"
+  schedules-line: "&7Loaded Schedules: &e{total}"
+  queue-line: "&7Pending Offline Rewards: &e{players} players &7(&e{entries} entries&7)"
+  schedule-entry: "&7- &f{podium} &8(&7{schedule}&8): &eNext in {next}"
+  footer: "&8&m----------------------------------------"
+
+test:
+  usage: "{prefix}&cUsage: /{label} test <podium|all> [simulate|execute]"
+  podium-not-found: "{prefix}&cPodium '&e{id}&c' does not exist."
+  started: "{prefix}&7Running &e{mode}&7 payout for &e{target}&7..."
+  sim-header: "&8&m----&r &6Simulation: {podium} &7({id}) &8&m----"
+  sim-entry: "&7#{rank} &f{player} &8(&7{value}&8) &7-> &e{status} &8[{commands} cmds]"
+  sim-skipped: "&7#{rank} &f{player} &8(&7{value}&8) &7-> &cSKIPPED &8({reason})"
+  sim-empty: "&7No valid ranked players found for this podium."
+  sim-footer: "&8&m----------------------------------------"
+  executed: "{prefix}&aExecuted payout for &e{podium}&a: &e{online} online&a, &e{offline} queued offline&a."
+
+queue:
+  usage: "{prefix}&cUsage: /{label} queue <list|inspect|clear> ..."
+  empty: "{prefix}&7There are currently no pending offline rewards."
+  list-header: "&8&m----&r &6Pending Offline Queue (Page {page}/{pages}) &8&m----"
+  list-entry: "&e{player} &8(&7{uuid}&8) &7- &f{count} reward(s)"
+  inspect-header: "&8&m----&r &6Queue for {player} &8&m----"
+  inspect-entry: "&7- &e{podium} &7#{rank} &8(&7{commands} cmds, expires in {expires}&8)"
+  player-not-found: "{prefix}&cNo pending rewards found for '&e{target}&c'."
+  cleared-player: "{prefix}&aCleared &e{count}&a pending reward(s) for &e{target}&a."
+  cleared-all: "{prefix}&aCleared all &e{count}&a pending reward(s) from the offline queue."
+  delivered-on-join: "{prefix}&aYou received &e{count}&a pending leaderboard reward(s)!"
+
+editor:
+  opened: "{prefix}&aOpened the RoyPodium GUI Editor."
+  closed-on-reload: "{prefix}&eYour RoyPodium editor was closed because the plugin was reloaded."
+  chat-prompt: "{prefix}&eType the new value in chat (or type &ccancel&e to abort):"
+  chat-cancelled: "{prefix}&cInput cancelled."
+  chat-updated: "{prefix}&aUpdated &e{field}&a to &f{value}&a."

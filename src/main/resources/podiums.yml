@@ -1,0 +1,60 @@
+# ==============================================================================
+# RoyPodium - Podiums & Rewards Configuration (podiums.yml)
+# ==============================================================================
+# Define unlimited leaderboard types using PlaceholderAPI placeholders.
+# Available placeholders in 'player-placeholder' and 'value-placeholder':
+#   {rank} or %rank%  -> replaced with rank number (1 .. top-size)
+# Available placeholders in reward commands:
+#   {player}          -> player's current username
+#   {uuid}            -> player's UUID (or "UNKNOWN" if uncached)
+#   {rank}            -> rank number
+#   {podium}          -> podium ID
+#   {podium_name}     -> stripped display name
+#   {value}           -> leaderboard score/value from value-placeholder
+#   {date}            -> payout date (yyyy-MM-dd)
+#   {time}            -> payout time (HH:mm:ss)
+#
+# Optional 'conditions' (evaluated at snapshot time against value-placeholder):
+#   Operators: =, !=, >, <, >=, <= (or eq, ne, gt, lt, gte, lte)
+#   Example:   conditions: [">= 5", "< 10000"]
+config-version: 2
+
+podiums:
+  kills_daily:
+    enabled: true
+    display-name: "&c&lDaily Top Kills"
+    schedule: "daily_midnight"
+    player-placeholder: "%ajlb_lb_statistic_player_kills_{rank}_daily_name%"
+    value-placeholder: "%ajlb_lb_statistic_player_kills_{rank}_daily_value%"
+    top-size: 5
+    # ALLOW_TIES: Reward every rank slot even if placeholders repeat a player.
+    # SKIP_DUPLICATE_PLAYER: Ensure a player UUID is only rewarded once per payout.
+    tie-policy: "ALLOW_TIES"
+    conditions:
+      - ">= 1"
+    ranks:
+      "1":
+        - "eco give {player} 5000"
+        - "broadcast &6{player} &ewon #1 in Daily Top Kills with {value} kills!"
+      "2":
+        - "eco give {player} 3000"
+      "3":
+        - "eco give {player} 1500"
+      "4-5":
+        - "eco give {player} 500"
+
+  balance_weekly:
+    enabled: false
+    display-name: "&a&lWeekly Top Balance"
+    schedule: "weekly_sunday"
+    player-placeholder: "%vault_top_player_{rank}%"
+    value-placeholder: "%vault_top_balance_{rank}%"
+    top-size: 3
+    tie-policy: "SKIP_DUPLICATE_PLAYER"
+    ranks:
+      "1":
+        - "give {player} diamond 16"
+      "2":
+        - "give {player} diamond 8"
+      "3":
+        - "give {player} diamond 4"

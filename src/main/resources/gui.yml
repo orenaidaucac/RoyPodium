@@ -1,0 +1,335 @@
+# ==============================================================================
+# RoyPodium - GUI Editor Configuration (gui.yml)
+# ==============================================================================
+# Every GUI title, slot, material, item name, lore, sound, and label can be
+# customized or translated here without touching code.
+# Supports MiniMessage, Hex (&#RRGGBB), and Legacy (&a, §a) mixed in one line.
+config-version: 2
+
+sounds:
+  click: "UI_BUTTON_CLICK"
+  save: "ENTITY_EXPERIENCE_ORB_PICKUP"
+  error: "ENTITY_VILLAGER_NO"
+  delete: "ENTITY_ITEM_BREAK"
+
+filler:
+  enabled: true
+  material: "GRAY_STAINED_GLASS_PANE"
+  name: " "
+  lore: []
+
+labels:
+  enabled-true: "&aEnabled"
+  enabled-false: "&cDisabled"
+  no-schedule: "&cNone"
+
+menus:
+  main:
+    title: "&6&lRoyPodium &8| &7Editor"
+    rows: 3
+    items:
+      podiums:
+        slot: 11
+        material: "GOLDEN_HELMET"
+        name: "&6&lManage Podiums"
+        lore:
+          - "&7Create, edit, test, or delete"
+          - "&7leaderboard reward podiums."
+          - ""
+          - "&eClick to open"
+      schedules:
+        slot: 13
+        material: "CLOCK"
+        name: "&b&lManage Schedules"
+        lore:
+          - "&7Configure timezones, frequencies,"
+          - "&7and start times."
+          - ""
+          - "&eClick to open"
+      queue:
+        slot: 15
+        material: "CHEST"
+        name: "&a&lOffline Reward Queue"
+        lore:
+          - "&7Inspect or clear pending rewards"
+          - "&7for offline players."
+          - ""
+          - "&eClick to open"
+      settings:
+        slot: 22
+        material: "COMPARATOR"
+        name: "&d&lGlobal Settings"
+        lore:
+          - "&7Adjust tick budget, missed policy,"
+          - "&7and queue expiration."
+          - ""
+          - "&eClick to open"
+
+  podium-list:
+    title: "&6&lRoyPodium &8| &7Podiums"
+    rows: 6
+    create-slot: 49
+    back-slot: 45
+    entry-material: "NETHER_STAR"
+    entry-name: "&6{display_name} &8(&7{id}&8)"
+    entry-lore:
+      - "&7Status: {status}"
+      - "&7Schedule: &f{schedule}"
+      - "&7Top Size: &e{top_size}"
+      - "&7Player PAPI: &f{player_papi}"
+      - "&7Value PAPI: &f{value_papi}"
+      - ""
+      - "&eLeft-Click &7to edit"
+      - "&bRight-Click &7to run simulation"
+      - "&cShift-Right-Click &7to delete"
+    create-item:
+      material: "EMERALD"
+      name: "&a&l+ Create New Podium"
+      lore:
+        - "&7Click to enter a new Podium ID"
+        - "&7in chat."
+    back-item:
+      material: "ARROW"
+      name: "&cBack to Main Menu"
+      lore: []
+
+  podium-edit:
+    title: "&6&lEdit Podium: &f{id}"
+    rows: 4
+    items:
+      toggle-enabled:
+        slot: 10
+        material: "LEVER"
+        name: "&eToggle Status"
+        lore:
+          - "&7Current: {status}"
+          - "&eClick to toggle"
+      display-name:
+        slot: 11
+        material: "NAME_TAG"
+        name: "&eDisplay Name"
+        lore:
+          - "&7Current: &f{display_name}"
+          - "&eClick to edit in chat"
+      schedule:
+        slot: 12
+        material: "CLOCK"
+        name: "&eSchedule Link"
+        lore:
+          - "&7Current: &f{schedule}"
+          - "&eClick to cycle schedules"
+      top-size:
+        slot: 13
+        material: "GOLD_INGOT"
+        name: "&eTop Size"
+        lore:
+          - "&7Current: &e{top_size}"
+          - "&eLeft-Click: +1 &8| &cRight-Click: -1"
+      player-placeholder:
+        slot: 14
+        material: "PLAYER_HEAD"
+        name: "&ePlayer Placeholder"
+        lore:
+          - "&7Current: &f{player_papi}"
+          - "&eClick to edit in chat"
+      value-placeholder:
+        slot: 15
+        material: "PAPER"
+        name: "&eValue Placeholder"
+        lore:
+          - "&7Current: &f{value_papi}"
+          - "&eClick to edit in chat"
+      rewards:
+        slot: 16
+        material: "DIAMOND"
+        name: "&bEdit Rank Rewards"
+        lore:
+          - "&7Configured rank rules: &e{rank_count}"
+          - "&eClick to manage rewards"
+      conditions:
+        slot: 20
+        material: "COMPARATOR"
+        name: "&eReward Conditions"
+        lore:
+          - "&7Active conditions: &e{condition_count}"
+          - "&eClick to manage value conditions"
+      test-live:
+        slot: 29
+        material: "BLAZE_POWDER"
+        name: "&6Run Live Payout Now"
+        lore:
+          - "&cExecutes real reward commands!"
+          - "&eClick to run"
+      back:
+        slot: 31
+        material: "ARROW"
+        name: "&cBack"
+        lore: []
+
+  reward-edit:
+    title: "&b&lRewards: &f{id}"
+    rows: 6
+    add-slot: 49
+    back-slot: 45
+    entry-material: "PAPER"
+    entry-name: "&eRank(s): &f{rank_key}"
+    entry-lore:
+      - "&7Commands:"
+      - "{commands}"
+      - ""
+      - "&eLeft-Click &7to add a command"
+      - "&cRight-Click &7to remove last command"
+      - "&4Shift-Right-Click &7to delete rank rule"
+    add-item:
+      material: "EMERALD"
+      name: "&a&l+ Add Rank Rule"
+      lore:
+        - "&7Enter rank or range (e.g. 1 or 4-10)"
+        - "&7in chat."
+    back-item:
+      material: "ARROW"
+      name: "&cBack"
+      lore: []
+
+  condition-edit:
+    title: "&e&lConditions: &f{id}"
+    rows: 6
+    add-slot: 49
+    back-slot: 45
+    entry-material: "REDSTONE_TORCH"
+    entry-name: "&eCondition: &f{condition}"
+    entry-lore:
+      - "&7Evaluated against value-placeholder"
+      - "&7at snapshot time."
+      - ""
+      - "&cShift-Right-Click &7to delete"
+    add-item:
+      material: "EMERALD"
+      name: "&a&l+ Add Condition"
+      lore:
+        - "&7Enter condition in chat"
+        - "&7(e.g. >= 5, != 0, < 1000)"
+    back-item:
+      material: "ARROW"
+      name: "&cBack"
+      lore: []
+
+  schedule-list:
+    title: "&b&lRoyPodium &8| &7Schedules"
+    rows: 6
+    create-slot: 49
+    back-slot: 45
+    entry-material: "CLOCK"
+    entry-name: "&b{id}"
+    entry-lore:
+      - "&7Timezone: &f{timezone}"
+      - "&7Frequency: &e{frequency}"
+      - "&7Start Time: &f{time_start}"
+      - "&7Next Run: &a{next_run}"
+      - ""
+      - "&eLeft-Click &7to edit"
+      - "&cShift-Right-Click &7to delete"
+    create-item:
+      material: "EMERALD"
+      name: "&a&l+ Create New Schedule"
+      lore:
+        - "&7Click to enter a new Schedule ID"
+        - "&7in chat."
+    back-item:
+      material: "ARROW"
+      name: "&cBack to Main Menu"
+      lore: []
+
+  schedule-edit:
+    title: "&b&lEdit Schedule: &f{id}"
+    rows: 3
+    items:
+      timezone:
+        slot: 10
+        material: "COMPASS"
+        name: "&eTimezone"
+        lore:
+          - "&7Current: &f{timezone}"
+          - "&eClick to edit in chat (e.g. UTC)"
+      frequency:
+        slot: 12
+        material: "REPEATER"
+        name: "&eFrequency"
+        lore:
+          - "&7Current: &e{frequency}"
+          - "&eClick to cycle (DAILY/WEEKLY/MONTHLY/INTERVAL)"
+      time-start:
+        slot: 14
+        material: "CLOCK"
+        name: "&eStart Time (HH:mm:ss)"
+        lore:
+          - "&7Current: &f{time_start}"
+          - "&eClick to edit in chat"
+      extra:
+        slot: 16
+        material: "BOOK"
+        name: "&eFrequency Parameter"
+        lore:
+          - "&7Current: &f{extra}"
+          - "&7(Days for WEEKLY, Day for MONTHLY, Duration for INTERVAL)"
+          - "&eClick to edit in chat"
+      back:
+        slot: 22
+        material: "ARROW"
+        name: "&cBack"
+        lore: []
+
+  queue-menu:
+    title: "&a&lRoyPodium &8| &7Offline Queue"
+    rows: 6
+    clear-all-slot: 49
+    back-slot: 45
+    entry-material: "PLAYER_HEAD"
+    entry-name: "&e{player}"
+    entry-lore:
+      - "&7UUID: &8{uuid}"
+      - "&7Pending Entries: &e{count}"
+      - "&7Total Commands: &e{commands}"
+      - ""
+      - "&cShift-Right-Click &7to clear player queue"
+    clear-all-item:
+      material: "BARRIER"
+      name: "&c&lClear All Pending Rewards"
+      lore:
+        - "&7Shift-Click to purge the entire"
+        - "&7offline reward queue."
+    back-item:
+      material: "ARROW"
+      name: "&cBack to Main Menu"
+      lore: []
+
+  settings-menu:
+    title: "&d&lRoyPodium &8| &7Settings"
+    rows: 3
+    items:
+      commands-per-tick:
+        slot: 11
+        material: "REDSTONE"
+        name: "&eCommands Per Tick"
+        lore:
+          - "&7Current: &e{commands_per_tick}"
+          - "&eLeft-Click: +1 &8| &cRight-Click: -1"
+      missed-policy:
+        slot: 13
+        material: "HOPPER"
+        name: "&eMissed Schedule Policy"
+        lore:
+          - "&7Current: &e{missed_policy}"
+          - "&eClick to cycle (SKIP/RUN_LATEST/RUN_ALL)"
+      queue-expiration:
+        slot: 15
+        material: "CLOCK"
+        name: "&eQueue Expiration"
+        lore:
+          - "&7Current: &f{expiration}"
+          - "&eClick to edit in chat (e.g. 7d or 0)"
+      back:
+        slot: 22
+        material: "ARROW"
+        name: "&cBack to Main Menu"
+        lore: []
