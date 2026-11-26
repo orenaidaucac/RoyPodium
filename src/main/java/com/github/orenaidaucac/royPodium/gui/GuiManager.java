@@ -302,8 +302,7 @@ public final class GuiManager {
                     boolean sendLive = e.getClick() != ClickType.RIGHT;
                     playSound(player, "click");
                     scheduler.runAtEntity(player, player::closeInventory);
-                    scheduler.runGlobal(() -> {
-                        PodiumSnapshot snap = podiumManager.captureSnapshot(def, "gui-test@" + System.currentTimeMillis());
+                    scheduler.runGlobal(() -> podiumManager.captureSnapshotIncremental(def, "gui-test@" + System.currentTimeMillis(), scheduler, snap -> {
                         if (snap.getEntries().isEmpty() && snap.getSkippedEntries().isEmpty()) {
                             snap = PodiumSnapshot.builder()
                                     .podiumId(def.getId())
@@ -315,14 +314,15 @@ public final class GuiManager {
                                     .build();
                         }
                         discordManager.runTest(player, def, snap, null, null, sendLive);
-                    });
+                    }));
                 });
 
         setConfiguredItem(gui, "menus.podium-edit.items.test-live", 29, Material.BLAZE_POWDER, "&6Run Live Payout Now", ph,
                 e -> {
                     playSound(player, "save");
                     scheduler.runAtEntity(player, player::closeInventory);
-                    scheduler.runGlobal(() -> podiumManager.runPayout(def, "manual@" + System.currentTimeMillis(), false, player));
+                    podiumManager.runPayoutBatchAsync("gui:" + def.getId(), List.of(def),
+                            d -> "manual@" + d.getId() + "@" + System.currentTimeMillis(), false, player, scheduler);
                 });
 
         setConfiguredItem(gui, "menus.podium-edit.items.back", 31, Material.ARROW, "&cBack", ph,

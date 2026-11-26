@@ -25,6 +25,11 @@ public final class MainConfig {
     private final int commandsPerTick;
     private final int intervalTicks;
 
+    private final int snapshotRanksPerTick;
+    private final double tickBudgetMs;
+    private final double minTps;
+    private final boolean asyncUuidLookup;
+
     private final Duration queueExpiration;
     private final int joinDelayTicks;
     private final boolean notifyOnJoin;

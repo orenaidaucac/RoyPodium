@@ -53,10 +53,9 @@ public final class DiscordManager {
             ZoneId zone = resolveZone(def);
             for (DiscordConfig.WebhookProfile profile : targets) {
                 DiscordTemplate tpl = resolveEffectiveTemplate(cfg, def, profile, null);
-                List<DiscordEmbedBuilder.WebhookPayload> payloads = DiscordEmbedBuilder.buildPayloads(
+                sender.enqueueAsync(profile, () -> DiscordEmbedBuilder.buildPayloads(
                         cfg, profile, tpl, def, snapshot, onlineCount, offlineCount, zone
-                );
-                sender.enqueue(profile, payloads, cfg);
+                ), cfg);
             }
         } catch (Throwable ex) {
             logger.warning("Failed to prepare Discord webhook notification for podium '" + def.getId() + "': " + ex.getMessage());
@@ -87,14 +86,26 @@ public final class DiscordManager {
         DiscordTemplate tpl = resolveEffectiveTemplate(cfg, def, profile, templateIdOpt);
 
         if (!sendLive) {
-            msgs.send(feedbackTarget, "webhook.preview-header",
-                    "&8&m----&r &9Discord Preview: {podium} &7({webhook}) &8&m----",
-                    Map.of("podium", def.getId(), "webhook", targetName));
-            for (String line : DiscordEmbedBuilder.buildPreviewLines(cfg, profile, tpl, def, snapshot, onlineCount, offlineCount, zone)) {
-                msgs.send(feedbackTarget, "webhook.preview-line", "&7{line}",
-                        Map.of(), Map.of("line", line));
-            }
-            msgs.send(feedbackTarget, "webhook.preview-footer", "&8&m----------------------------------------");
+            scheduler.runAsync(() -> {
+                List<String> previewLines = DiscordEmbedBuilder.buildPreviewLines(
+                        cfg, profile, tpl, def, snapshot, onlineCount, offlineCount, zone
+                );
+                Runnable reply = () -> {
+                    msgs.send(feedbackTarget, "webhook.preview-header",
+                            "&8&m----&r &9Discord Preview: {podium} &7({webhook}) &8&m----",
+                            Map.of("podium", def.getId(), "webhook", targetName));
+                    for (String line : previewLines) {
+                        msgs.send(feedbackTarget, "webhook.preview-line", "&7{line}",
+                                Map.of(), Map.of("line", line));
+                    }
+                    msgs.send(feedbackTarget, "webhook.preview-footer", "&8&m----------------------------------------");
+                };
+                if (feedbackTarget instanceof Player p) {
+                    scheduler.runAtEntity(p, reply);
+                } else {
+                    scheduler.runGlobal(reply);
+                }
+            });
             return;
         }
 
@@ -130,10 +141,9 @@ public final class DiscordManager {
                 "{prefix}&7Sending test Discord webhook '&e{webhook}&7' (template '&b{template}&7') for podium &e{podium}&7...",
                 Map.of("webhook", profile.getId(), "template", tpl.getId(), "podium", def.getId()));
 
-        List<DiscordEmbedBuilder.WebhookPayload> payloads = DiscordEmbedBuilder.buildPayloads(
+        sender.sendTestBuildAsync(profile, () -> DiscordEmbedBuilder.buildPayloads(
                 cfg, profile, tpl, def, snapshot, onlineCount, offlineCount, zone
-        );
-        sender.sendTestAsync(profile, payloads, cfg).thenAccept(res -> {
+        ), cfg).thenAccept(res -> {
             Runnable reply = () -> {
                 if (res.success()) {
                     msgs.send(feedbackTarget, "webhook.send-success",

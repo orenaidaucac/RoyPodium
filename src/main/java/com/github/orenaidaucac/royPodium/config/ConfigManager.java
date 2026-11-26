@@ -44,7 +44,7 @@ import java.util.logging.Logger;
  */
 public final class ConfigManager {
 
-    private static final int CURRENT_CONFIG_VERSION = 5;
+    private static final int CURRENT_CONFIG_VERSION = 6;
     private static final List<String> CONFIG_FILES = List.of(
             "config.yml", "messages.yml", "schedules.yml", "podiums.yml", "gui.yml", "discord.yml"
     );
@@ -207,6 +207,11 @@ public final class ConfigManager {
             intervalTicks = 1;
         }
 
+        int snapshotRanksPerTick = Math.max(1, yaml.getInt("performance.snapshot-ranks-per-tick", 20));
+        double tickBudgetMs = Math.max(1.0, yaml.getDouble("performance.tick-budget-ms", 12.0));
+        double minTps = Math.max(1.0, Math.min(20.0, yaml.getDouble("performance.min-tps", 18.0)));
+        boolean asyncUuidLookup = yaml.getBoolean("performance.async-uuid-lookup", true);
+
         String expRaw = yaml.getString("queue.expiration", "7d");
         Duration queueExpiration = TimeUtil.parseDuration(expRaw).orElseGet(() -> {
             warnings.add("[config.yml] Key 'queue.expiration' has invalid duration '" + expRaw
@@ -247,6 +252,10 @@ public final class ConfigManager {
                 .invalidPlaceholderValues(Set.copyOf(invalidValues))
                 .commandsPerTick(commandsPerTick)
                 .intervalTicks(intervalTicks)
+                .snapshotRanksPerTick(snapshotRanksPerTick)
+                .tickBudgetMs(tickBudgetMs)
+                .minTps(minTps)
+                .asyncUuidLookup(asyncUuidLookup)
                 .queueExpiration(queueExpiration)
                 .joinDelayTicks(joinDelay)
                 .notifyOnJoin(notifyOnJoin)

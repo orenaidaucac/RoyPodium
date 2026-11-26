@@ -136,7 +136,12 @@ public final class RoyPodium extends JavaPlugin {
 
     private void startServices() {
         var mainCfg = configManager.getMainConfig();
-        dispatchQueue.start(mainCfg.getCommandsPerTick(), mainCfg.getIntervalTicks());
+        dispatchQueue.start(
+                mainCfg.getCommandsPerTick(),
+                mainCfg.getIntervalTicks(),
+                mainCfg.getTickBudgetMs(),
+                mainCfg.getMinTps()
+        );
         scheduleManager.start();
     }
 

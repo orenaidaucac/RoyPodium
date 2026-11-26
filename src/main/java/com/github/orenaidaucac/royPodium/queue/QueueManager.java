@@ -17,13 +17,16 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Manages persistent offline reward queues in {@code data/pending-rewards.yml}.
@@ -61,9 +64,12 @@ public final class QueueManager implements Listener {
     private final Path dataPath;
 
     private final Map<UUID, List<PendingReward>> pendingByUuid = new ConcurrentHashMap<>();
+    /** Fast O(1) name -> UUID cache populated on load and join to avoid blocking Mojang lookups. */
+    private final Map<String, UUID> knownNameToUuid = new ConcurrentHashMap<>();
     /** Raw YAML paths -> values for malformed manual entries so they are never silently deleted. */
     private final Map<String, Object> preservedInvalidEntries = Collections.synchronizedMap(new LinkedHashMap<>());
     private final Object saveLock = new Object();
+    private final AtomicBoolean saveScheduled = new AtomicBoolean(false);
 
     public QueueManager(Plugin plugin, ConfigManager configManager, SchedulerAdapter scheduler, CommandDispatchQueue dispatcher) {
         this.plugin = plugin;
@@ -158,6 +164,9 @@ public final class QueueManager implements Listener {
                     pruned = true;
                 } else {
                     list.add(reward);
+                    if (reward.getLastKnownName() != null && !reward.getLastKnownName().isBlank()) {
+                        knownNameToUuid.put(reward.getLastKnownName().toLowerCase(Locale.ROOT), uuid);
+                    }
                 }
             }
             if (!list.isEmpty()) {
@@ -173,6 +182,36 @@ public final class QueueManager implements Listener {
      * Enqueues a reward for an offline player, preventing duplicate payoutId+rank entries.
      */
     public boolean enqueueOffline(PendingReward reward) {
+        boolean added = insertOfflineInternal(reward);
+        if (added) {
+            saveAsync();
+        }
+        return added;
+    }
+
+    /**
+     * Enqueues a batch of offline rewards and triggers a single coalesced async YAML save.
+     */
+    public int enqueueOfflineBatch(Collection<PendingReward> rewards) {
+        if (rewards == null || rewards.isEmpty()) {
+            return 0;
+        }
+        int added = 0;
+        for (PendingReward reward : rewards) {
+            if (insertOfflineInternal(reward)) {
+                added++;
+            }
+        }
+        if (added > 0) {
+            saveAsync();
+        }
+        return added;
+    }
+
+    private boolean insertOfflineInternal(PendingReward reward) {
+        if (reward.getLastKnownName() != null && !reward.getLastKnownName().isBlank()) {
+            knownNameToUuid.put(reward.getLastKnownName().toLowerCase(Locale.ROOT), reward.getPlayerUuid());
+        }
         List<PendingReward> list = pendingByUuid.computeIfAbsent(
                 reward.getPlayerUuid(), k -> Collections.synchronizedList(new ArrayList<>())
         );
@@ -186,15 +225,22 @@ public final class QueueManager implements Listener {
                 return false;
             }
             list.add(reward);
+            return true;
         }
-        saveAsync();
-        return true;
+    }
+
+    public Optional<UUID> getCachedUuid(String playerName) {
+        if (playerName == null || playerName.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(knownNameToUuid.get(playerName.toLowerCase(Locale.ROOT)));
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         UUID uuid = player.getUniqueId();
+        knownNameToUuid.put(player.getName().toLowerCase(Locale.ROOT), uuid);
         List<PendingReward> list = pendingByUuid.get(uuid);
         if (list == null || list.isEmpty()) {
             return;
@@ -329,16 +375,24 @@ public final class QueueManager implements Listener {
         return preservedInvalidEntries.size();
     }
 
+    /**
+     * Coalesces concurrent save requests and runs YAML serialization + atomic file write 100% off the Main Thread.
+     */
     public void saveAsync() {
-        String serialized = serializeToYaml();
-        if (plugin.isEnabled()) {
-            scheduler.runAsync(() -> writeSerialized(serialized));
-        } else {
-            writeSerialized(serialized);
+        if (!plugin.isEnabled()) {
+            writeSerialized(serializeToYaml());
+            return;
+        }
+        if (saveScheduled.compareAndSet(false, true)) {
+            scheduler.runAsync(() -> {
+                saveScheduled.set(false);
+                writeSerialized(serializeToYaml());
+            });
         }
     }
 
     public void saveSync() {
+        saveScheduled.set(false);
         writeSerialized(serializeToYaml());
     }
 
@@ -346,18 +400,20 @@ public final class QueueManager implements Listener {
         YamlConfiguration yaml = new YamlConfiguration();
         for (Map.Entry<UUID, List<PendingReward>> entry : pendingByUuid.entrySet()) {
             String uuidKey = entry.getKey().toString();
+            List<PendingReward> copy;
             synchronized (entry.getValue()) {
-                for (PendingReward r : entry.getValue()) {
-                    String base = "players." + uuidKey + ".entries." + r.getEntryId();
-                    yaml.set(base + ".last-known-name", r.getLastKnownName());
-                    yaml.set(base + ".podium-id", r.getPodiumId());
-                    yaml.set(base + ".rank", r.getRank());
-                    yaml.set(base + ".value", r.getValue());
-                    yaml.set(base + ".payout-id", r.getPayoutId() != null ? r.getPayoutId() : "");
-                    yaml.set(base + ".commands", r.getCommands());
-                    yaml.set(base + ".created-at", r.getCreatedAtEpochMs());
-                    yaml.set(base + ".expires-at", r.getExpiresAtEpochMs());
-                }
+                copy = new ArrayList<>(entry.getValue());
+            }
+            for (PendingReward r : copy) {
+                String base = "players." + uuidKey + ".entries." + r.getEntryId();
+                yaml.set(base + ".last-known-name", r.getLastKnownName());
+                yaml.set(base + ".podium-id", r.getPodiumId());
+                yaml.set(base + ".rank", r.getRank());
+                yaml.set(base + ".value", r.getValue());
+                yaml.set(base + ".payout-id", r.getPayoutId() != null ? r.getPayoutId() : "");
+                yaml.set(base + ".commands", r.getCommands());
+                yaml.set(base + ".created-at", r.getCreatedAtEpochMs());
+                yaml.set(base + ".expires-at", r.getExpiresAtEpochMs());
             }
         }
         synchronized (preservedInvalidEntries) {

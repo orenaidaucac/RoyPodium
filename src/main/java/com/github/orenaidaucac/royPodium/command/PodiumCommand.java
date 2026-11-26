@@ -200,16 +200,24 @@ public final class PodiumCommand implements CommandExecutor, TabCompleter {
             targets.add(def);
         }
 
+        String runKey = "test:" + target.toLowerCase() + ":" + (simulate ? "sim" : "exec");
+        boolean accepted = podiumManager.runPayoutBatchAsync(
+                runKey,
+                targets,
+                def -> (simulate ? "sim@" : "test@") + def.getId() + "@" + System.currentTimeMillis(),
+                simulate,
+                sender,
+                scheduler
+        );
+        if (!accepted) {
+            configManager.getMessages().send(sender, "test.already-running",
+                    "{prefix}&cA test or payout task is already running for '&e{target}&c'. Please wait for it to finish.",
+                    Map.of("target", target));
+            return;
+        }
         configManager.getMessages().send(sender, "test.started",
                 "{prefix}&7Running &e{mode}&7 payout for &e{target}&7...",
                 Map.of("mode", simulate ? "SIMULATE" : "EXECUTE", "target", target));
-
-        scheduler.runGlobal(() -> {
-            for (PodiumDefinition def : targets) {
-                String payoutId = (simulate ? "sim@" : "test@") + def.getId() + "@" + System.currentTimeMillis();
-                podiumManager.runPayout(def, payoutId, simulate, sender);
-            }
-        });
     }
 
     private void handleQueue(CommandSender sender, String label, String[] args) {
@@ -336,13 +344,16 @@ public final class PodiumCommand implements CommandExecutor, TabCompleter {
         boolean sendLive = "send".equals(mode);
 
         scheduler.runGlobal(() -> {
-            PodiumSnapshot snapshot = placeholderResolver.isPlaceholderApiAvailable()
-                    ? podiumManager.captureSnapshot(def, "webhook-test@" + System.currentTimeMillis())
-                    : createSampleSnapshot(def);
-            if (snapshot.getEntries().isEmpty() && snapshot.getSkippedEntries().isEmpty()) {
-                snapshot = createSampleSnapshot(def);
+            if (!placeholderResolver.isPlaceholderApiAvailable()) {
+                plugin.getDiscordManager().runTest(sender, def, createSampleSnapshot(def), webhookOpt, templateOpt, sendLive);
+                return;
             }
-            plugin.getDiscordManager().runTest(sender, def, snapshot, webhookOpt, templateOpt, sendLive);
+            podiumManager.captureSnapshotIncremental(def, "webhook-test@" + System.currentTimeMillis(), scheduler, snapshot -> {
+                PodiumSnapshot finalSnap = (snapshot.getEntries().isEmpty() && snapshot.getSkippedEntries().isEmpty())
+                        ? createSampleSnapshot(def)
+                        : snapshot;
+                plugin.getDiscordManager().runTest(sender, def, finalSnap, webhookOpt, templateOpt, sendLive);
+            });
         });
     }
 

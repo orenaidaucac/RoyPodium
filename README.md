@@ -285,8 +285,13 @@ Send rich, customizable **Discord Embed** notifications automatically after each
 
 ## ⚡ Performance & Anti-Lag
 
-- **Tick-Budgeted Dispatch:** `dispatch.commands-per-tick` (default `5`) and `dispatch.interval-ticks` (default `1`) spread large console command bursts across ticks to protect server TPS.
-- **Atomic Async Storage:** Queue and state files are written asynchronously to temporary files and atomically moved to prevent file corruption on crash without blocking the main thread.
+RoyPodium is engineered to avoid TPS and MSPT spikes even on large leaderboards:
+
+- **Tick-Budgeted Dispatch & Snapshots:** `dispatch.commands-per-tick` (default `5`), `performance.snapshot-ranks-per-tick` (default `20`), and `performance.tick-budget-ms` (default `12.0` ms) spread both live/test payouts and leaderboard snapshots cleanly across ticks.
+- **TPS-Aware Auto-Throttling:** `performance.min-tps` (default `18.0`) monitors server TPS and automatically scales down per-tick work if the server is already under load.
+- **Non-Blocking Offline UUID Lookups:** `performance.async-uuid-lookup` (default `true`) avoids synchronous Mojang HTTP lookups on the Main/Region Thread by checking local/usercache first and resolving uncached UUIDs asynchronously.
+- **Coalesced Async Storage & Off-Thread Webhooks:** Offline queue YAML serialization and Discord Embed rendering + HTTP requests run 100% off the Main/Region Thread.
+- **Overlap Protection:** Prevents duplicate concurrent `/roypodium test` runs from piling up.
 
 ---
 
@@ -366,6 +371,7 @@ If `conditions:` are configured on that podium, `/roypodium test <podium> simula
 ## 📝 Update Changelog
 
 ### Latest Update (`2026.1`)
+- **Optimized** test and payout performance to eliminate TPS/MSPT drops: non-blocking cached UUID lookups with async fallback (`performance.async-uuid-lookup`), tick-budgeted incremental snapshot scanning (`performance.snapshot-ranks-per-tick`, `performance.tick-budget-ms`), TPS-aware throttling (`performance.min-tps`), 100% async coalesced `QueueManager` YAML serialization, off-thread Discord payload building, and overlap protection for test commands.
 - **Expanded** **Discord Webhooks** to support Discord's full official Webhook & Embed API: named `templates` with `extends` inheritance, `LIST_FIELD` / `PER_ENTRY_FIELD` / `PER_ENTRY_EMBED` layouts, `content`, `tts`, `flags` (`suppress-embeds`, `suppress-notifications`), `thread-id` / `thread-name` / `applied-tags`, Link Buttons (`with_components=true`), `author`/`image`/`footer-icon-url`/`inline` fields, conditional `rank-colors`, dynamic `<t:...>` timestamps, `/roypodium webhook validate`, and GUI template selector.
 - **Added** **Discord Webhook** payout notifications (`discord.yml`, per-podium `discord` & `value-format` in `podiums.yml`), official Discord Embed limit splitting, SSRF/URL-masking/mention-escape security, async rate-limit handling, `/roypodium webhook <preview|send>`, and GUI toggle/test buttons.
 - **Added** `SPECIFIC_DATES` schedule frequency in `schedules.yml` supporting exact date-times (`YYYY-MM-DD HH:mm:ss`), `*` wildcards for recurring dates, multiple times per day, `short-month-policy` (`SKIP_MONTH` / `LAST_DAY`), DST-safe evaluation, and an in-game GUI date editor (`schedule-dates`).

@@ -47,10 +47,12 @@ public final class DiscordWebhookSender {
     }
 
     /**
-     * Enqueues webhook payloads asynchronously (fire-and-forget for scheduled payouts).
+     * Builds and enqueues webhook payloads 100% asynchronously off the Main/Region Thread.
      */
-    public void enqueue(DiscordConfig.WebhookProfile profile, List<DiscordEmbedBuilder.WebhookPayload> payloads, DiscordConfig cfg) {
-        if (profile == null || payloads == null || payloads.isEmpty()) {
+    public void enqueueAsync(DiscordConfig.WebhookProfile profile,
+                             java.util.function.Supplier<List<DiscordEmbedBuilder.WebhookPayload>> payloadSupplier,
+                             DiscordConfig cfg) {
+        if (profile == null || payloadSupplier == null) {
             return;
         }
         ExecutorService exec = this.executor;
@@ -58,6 +60,10 @@ public final class DiscordWebhookSender {
             return;
         }
         exec.submit(() -> {
+            List<DiscordEmbedBuilder.WebhookPayload> payloads = payloadSupplier.get();
+            if (payloads == null || payloads.isEmpty()) {
+                return;
+            }
             for (DiscordEmbedBuilder.WebhookPayload payload : payloads) {
                 String targetUrl = buildTargetUrl(profile.getUrl(), payload.threadId(), payload.hasComponents());
                 SendResult res = sendBlocking(targetUrl, profile.getMaskedUrl(), payload.json(),
@@ -71,16 +77,20 @@ public final class DiscordWebhookSender {
     }
 
     /**
-     * Sends webhook payloads asynchronously and returns a future for admin test command feedback.
+     * Builds and sends test webhook payloads 100% asynchronously and returns a future for feedback.
      */
-    public CompletableFuture<SendResult> sendTestAsync(DiscordConfig.WebhookProfile profile,
-                                                       List<DiscordEmbedBuilder.WebhookPayload> payloads,
-                                                       DiscordConfig cfg) {
+    public CompletableFuture<SendResult> sendTestBuildAsync(DiscordConfig.WebhookProfile profile,
+                                                            java.util.function.Supplier<List<DiscordEmbedBuilder.WebhookPayload>> payloadSupplier,
+                                                            DiscordConfig cfg) {
         ExecutorService exec = this.executor;
         if (exec == null || exec.isShutdown()) {
             return CompletableFuture.completedFuture(SendResult.fail(0, "Webhook sender is shut down."));
         }
         return CompletableFuture.supplyAsync(() -> {
+            List<DiscordEmbedBuilder.WebhookPayload> payloads = payloadSupplier.get();
+            if (payloads == null || payloads.isEmpty()) {
+                return SendResult.fail(0, "Generated empty webhook payload.");
+            }
             SendResult last = SendResult.ok(204);
             for (DiscordEmbedBuilder.WebhookPayload payload : payloads) {
                 String targetUrl = buildTargetUrl(profile.getUrl(), payload.threadId(), payload.hasComponents());

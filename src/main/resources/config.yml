@@ -2,7 +2,7 @@
 # RoyPodium - Main Configuration (config.yml)
 # ==============================================================================
 # Do NOT edit config-version manually. It is used for automatic config upgrades.
-config-version: 2
+config-version: 6
 
 # Unlimited custom command aliases for /roypodium (in addition to /podium).
 # Applied immediately on /roypodium reload without restarting the server.
@@ -41,6 +41,21 @@ dispatch:
 
   # How often (in ticks, 20 ticks = 1 second) the dispatcher processes commands.
   interval-ticks: 1
+
+performance:
+  # Maximum number of leaderboard ranks evaluated per tick during snapshots and tests.
+  snapshot-ranks-per-tick: 20
+
+  # Soft per-tick time budget (milliseconds) for snapshot & command dispatch loops.
+  # Prevents RoyPodium from pushing tick MSPT above safe limits.
+  tick-budget-ms: 12.0
+
+  # Minimum server TPS before RoyPodium automatically scales down per-tick work.
+  min-tps: 18.0
+
+  # Resolve uncached offline player UUIDs asynchronously off the Main/Region Thread.
+  # Recommended: true (prevents blocking Mojang HTTP lookups from freezing TPS).
+  async-uuid-lookup: true
 
 queue:
   # How long offline pending rewards remain valid before expiring.

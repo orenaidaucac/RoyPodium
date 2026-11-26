@@ -17,6 +17,10 @@ public final class DiscordTextSanitizer {
         if (input == null || input.isEmpty()) {
             return "";
         }
+        // O(1) fast-path when no Minecraft formatting characters are present
+        if (input.indexOf('&') < 0 && input.indexOf('§') < 0 && input.indexOf('<') < 0) {
+            return input;
+        }
         // Protect Discord dynamic timestamps (<t:123456:R>) from MiniMessage tag parsing
         java.util.regex.Matcher m = java.util.regex.Pattern.compile("<t:(-?\\d+)(?::([tTdDfFR]))?>").matcher(input);
         java.util.List<String> preserved = new java.util.ArrayList<>();

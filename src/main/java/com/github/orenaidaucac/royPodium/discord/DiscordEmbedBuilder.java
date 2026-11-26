@@ -558,13 +558,21 @@ public final class DiscordEmbedBuilder {
                 .replace("{timestamp_short}", "<t:" + ctx.epochSeconds + ":f>")
                 .replace("{timestamp_date}", "<t:" + ctx.epochSeconds + ":D>")
                 .replace("{timestamp_time}", "<t:" + ctx.epochSeconds + ":T>");
-        if (out.contains("%") && isPlaceholderApiPresent()) {
+        if (out.contains("%") && isPlaceholderApiPresent() && isPrimaryThreadSafe()) {
             try {
                 out = PlaceholderAPI.setPlaceholders(null, out);
             } catch (Throwable ignored) {
             }
         }
         return out;
+    }
+
+    private static boolean isPrimaryThreadSafe() {
+        try {
+            return Bukkit.getServer() == null || Bukkit.isPrimaryThread();
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private static boolean isPlaceholderApiPresent() {

@@ -3,7 +3,7 @@
 # ==============================================================================
 # Supports MiniMessage (<gold>, <gradient:#ff0000:#00ff00>), Hex (&#RRGGBB),
 # and Legacy (&a, §a, &l) mixed together on the same line.
-config-version: 5
+config-version: 6
 
 prefix: "&8[&6RoyPodium&8] &r"
 
@@ -43,6 +43,7 @@ test:
   usage: "{prefix}&cUsage: /{label} test <podium|all> [simulate|execute]"
   podium-not-found: "{prefix}&cPodium '&e{id}&c' does not exist."
   started: "{prefix}&7Running &e{mode}&7 payout for &e{target}&7..."
+  already-running: "{prefix}&cA test or payout task is already running for '&e{target}&c'. Please wait for it to finish."
   sim-header: "&8&m----&r &6Simulation: {podium} &7({id}) &8&m----"
   sim-entry: "&7#{rank} &f{player} &8(&7{value}&8) &7-> &e{status} &8[{commands} cmds]"
   sim-skipped: "&7#{rank} &f{player} &8(&7{value}&8) &7-> &cSKIPPED &8({reason})"
