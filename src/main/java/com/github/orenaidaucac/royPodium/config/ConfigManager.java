@@ -1,5 +1,7 @@
 package com.github.orenaidaucac.royPodium.config;
 
+import com.github.orenaidaucac.royPodium.discord.DiscordWebhookValidator;
+import com.github.orenaidaucac.royPodium.discord.ValueFormatSpec;
 import com.github.orenaidaucac.royPodium.podium.ConditionSpec;
 import com.github.orenaidaucac.royPodium.podium.PodiumDefinition;
 import com.github.orenaidaucac.royPodium.podium.TiePolicy;
@@ -40,9 +42,9 @@ import java.util.logging.Logger;
  */
 public final class ConfigManager {
 
-    private static final int CURRENT_CONFIG_VERSION = 3;
+    private static final int CURRENT_CONFIG_VERSION = 4;
     private static final List<String> CONFIG_FILES = List.of(
-            "config.yml", "messages.yml", "schedules.yml", "podiums.yml", "gui.yml"
+            "config.yml", "messages.yml", "schedules.yml", "podiums.yml", "gui.yml", "discord.yml"
     );
 
     private final Plugin plugin;
@@ -51,6 +53,7 @@ public final class ConfigManager {
     @Getter private MainConfig mainConfig;
     @Getter private MessagesConfig messages;
     @Getter private GuiConfig guiConfig;
+    @Getter private DiscordConfig discordConfig;
     @Getter private Map<String, ScheduleSpec> schedules = new LinkedHashMap<>();
     @Getter private Map<String, PodiumDefinition> podiums = new LinkedHashMap<>();
     @Getter private List<String> lastValidationWarnings = List.of();
@@ -60,6 +63,7 @@ public final class ConfigManager {
     private YamlConfiguration rawSchedules;
     private YamlConfiguration rawPodiums;
     private YamlConfiguration rawGui;
+    private YamlConfiguration rawDiscord;
 
     public ConfigManager(Plugin plugin) {
         this.plugin = plugin;
@@ -78,11 +82,13 @@ public final class ConfigManager {
         rawSchedules = loadAndMigrate("schedules.yml", false, warnings);
         rawPodiums = loadAndMigrate("podiums.yml", false, warnings);
         rawGui = loadAndMigrate("gui.yml", true, warnings);
+        rawDiscord = loadAndMigrate("discord.yml", true, warnings);
 
         this.mainConfig = parseMainConfig(rawMain, warnings);
         this.messages = new MessagesConfig(rawMessages);
         this.guiConfig = new GuiConfig(rawGui);
         validateGuiConfig(rawGui, warnings);
+        this.discordConfig = parseDiscordConfig(rawDiscord, warnings);
         this.schedules = parseSchedules(rawSchedules, mainConfig.getDefaultTimezone(), warnings);
         this.podiums = parsePodiums(rawPodiums, schedules, warnings);
 
@@ -437,6 +443,23 @@ public final class ConfigManager {
                 }
             }
 
+            boolean discordEnabled = entry.getBoolean("discord.enabled", true);
+            List<String> discordWebhooks = new ArrayList<>(entry.getStringList("discord.webhooks"));
+            String singleWh = entry.getString("discord.webhook", "");
+            if (!singleWh.isBlank() && !discordWebhooks.contains(singleWh)) {
+                discordWebhooks.add(singleWh);
+            }
+
+            ValueFormatSpec valueFormat = ValueFormatSpec.builder()
+                    .grouping(entry.getBoolean("value-format.grouping", true))
+                    .decimals(entry.getInt("value-format.decimals", -1))
+                    .compact(entry.getBoolean("value-format.compact", false))
+                    .prefix(entry.getString("value-format.prefix", ""))
+                    .suffix(entry.getString("value-format.suffix", ""))
+                    .keepNonNumeric(entry.getBoolean("value-format.keep-non-numeric", true))
+                    .fallback(entry.getString("value-format.fallback", "N/A"))
+                    .build();
+
             Map<String, List<String>> rankRules = new LinkedHashMap<>();
             ConfigurationSection ranksSec = entry.getConfigurationSection("ranks");
             if (ranksSec != null) {
@@ -455,10 +478,130 @@ public final class ConfigManager {
                     .topSize(topSize)
                     .tiePolicy(tiePolicy)
                     .conditions(List.copyOf(conditions))
+                    .discordEnabled(discordEnabled)
+                    .discordWebhooks(List.copyOf(discordWebhooks))
+                    .valueFormat(valueFormat)
                     .rankRules(rankRules)
                     .build());
         }
         return map;
+    }
+
+    private DiscordConfig parseDiscordConfig(YamlConfiguration yaml, List<String> warnings) {
+        boolean enabled = yaml.getBoolean("enabled", false);
+        String defaultWebhook = yaml.getString("default-webhook", "default");
+
+        Map<String, DiscordConfig.WebhookProfile> webhooks = new LinkedHashMap<>();
+        ConfigurationSection whSec = yaml.getConfigurationSection("webhooks");
+        if (whSec != null) {
+            for (String key : whSec.getKeys(false)) {
+                ConfigurationSection entry = whSec.getConfigurationSection(key);
+                if (entry == null) {
+                    warnings.add("[discord.yml] Key 'webhooks." + key + "' must be a YAML section.");
+                    continue;
+                }
+                String url = entry.getString("url", "").trim();
+                String masked = DiscordWebhookValidator.maskUrl(url);
+                if (enabled) {
+                    DiscordWebhookValidator.ValidationResult res = DiscordWebhookValidator.validate(url);
+                    if (!res.valid()) {
+                        warnings.add("[discord.yml] Key 'webhooks." + key + ".url' (" + masked + ") is invalid: "
+                                + res.reason() + " Fix: Provide a valid https://discord.com/api/webhooks/<id>/<token> URL. Skipping webhook '" + key + "'.");
+                        continue;
+                    }
+                }
+                webhooks.put(key, DiscordConfig.WebhookProfile.builder()
+                        .id(key)
+                        .url(url)
+                        .maskedUrl(masked)
+                        .username(entry.getString("username", "RoyPodium"))
+                        .avatarUrl(entry.getString("avatar-url", ""))
+                        .build());
+            }
+        }
+
+        int timeoutSec = Math.max(2, yaml.getInt("rate-limit.timeout-seconds", 10));
+        int maxRetries = Math.max(0, yaml.getInt("rate-limit.max-retries", 3));
+        long minIntervalMs = Math.max(250L, yaml.getLong("rate-limit.min-interval-ms", 1000L));
+        int drainSec = Math.max(1, yaml.getInt("rate-limit.shutdown-drain-seconds", 5));
+        int testCooldown = Math.max(0, yaml.getInt("test.cooldown-seconds", 10));
+
+        boolean avatarEnabled = yaml.getBoolean("player-avatar.enabled", true);
+        String avatarTpl = yaml.getString("player-avatar.url-template", "https://mc-heads.net/avatar/{player}/128");
+
+        String statusOnline = yaml.getString("status-labels.online", "Delivered");
+        String statusOffline = yaml.getString("status-labels.offline", "Queued (Offline)");
+        String statusSkipped = yaml.getString("status-labels.skipped", "Skipped ({reason})");
+
+        Map<String, String> rankIcons = new LinkedHashMap<>();
+        ConfigurationSection iconsSec = yaml.getConfigurationSection("rank-icons");
+        String defaultIcon = "#{rank}";
+        if (iconsSec != null) {
+            for (String key : iconsSec.getKeys(false)) {
+                if ("default".equalsIgnoreCase(key)) {
+                    defaultIcon = iconsSec.getString(key, "#{rank}");
+                } else {
+                    rankIcons.put(key, iconsSec.getString(key, "#" + key));
+                }
+            }
+        }
+
+        int embedColor = parseHexColor(yaml.getString("embed.color", "#FFD700"), warnings);
+        DiscordConfig.ThumbnailMode thumbMode = DiscordConfig.ThumbnailMode.TOP_1_PLAYER;
+        String thumbRaw = yaml.getString("embed.thumbnail-mode", "TOP_1_PLAYER").trim().toUpperCase();
+        try {
+            thumbMode = DiscordConfig.ThumbnailMode.valueOf(thumbRaw);
+        } catch (IllegalArgumentException ex) {
+            warnings.add("[discord.yml] Key 'embed.thumbnail-mode' has invalid value '" + thumbRaw
+                    + "'. Fix: Use NONE, TOP_1_PLAYER, or CUSTOM_URL. Using TOP_1_PLAYER.");
+        }
+
+        return DiscordConfig.builder()
+                .enabled(enabled)
+                .defaultWebhook(defaultWebhook)
+                .webhooks(Map.copyOf(webhooks))
+                .timeoutSeconds(timeoutSec)
+                .maxRetries(maxRetries)
+                .minIntervalMs(minIntervalMs)
+                .shutdownDrainSeconds(drainSec)
+                .testCooldownSeconds(testCooldown)
+                .playerAvatarEnabled(avatarEnabled)
+                .playerAvatarUrlTemplate(avatarTpl)
+                .statusOnline(statusOnline)
+                .statusOffline(statusOffline)
+                .statusSkipped(statusSkipped)
+                .rankIcons(Map.copyOf(rankIcons))
+                .defaultRankIcon(defaultIcon)
+                .embedColor(embedColor)
+                .embedTitle(yaml.getString("embed.title", "{podium_name} — Payout Results"))
+                .embedDescription(yaml.getString("embed.description", "Scheduled payout completed at {date} {time} ({timezone})."))
+                .includeTimestamp(yaml.getBoolean("embed.include-timestamp", true))
+                .thumbnailMode(thumbMode)
+                .thumbnailUrl(yaml.getString("embed.thumbnail-url", ""))
+                .fieldTitle(yaml.getString("embed.field-title", "Leaderboard"))
+                .entryFormat(yaml.getString("embed.entry-format", "{rank_icon} **#{rank}** {player} — **{value}** *({status})*"))
+                .skippedFormat(yaml.getString("embed.skipped-format", "{rank_icon} **#{rank}** {player} — {value} *(Skipped: {reason})*"))
+                .includeSkipped(yaml.getBoolean("embed.include-skipped", true))
+                .emptyMessage(yaml.getString("embed.empty-message", "No eligible players were rewarded in this payout."))
+                .footer(yaml.getString("embed.footer", "RoyPodium • {online_count} online • {offline_count} queued • {skipped_count} skipped"))
+                .build();
+    }
+
+    private int parseHexColor(String raw, List<String> warnings) {
+        if (raw == null || raw.isBlank()) {
+            return 0xFFD700;
+        }
+        String cleaned = raw.trim();
+        if (cleaned.startsWith("#")) {
+            cleaned = cleaned.substring(1);
+        }
+        try {
+            return Integer.parseInt(cleaned, 16) & 0xFFFFFF;
+        } catch (NumberFormatException ex) {
+            warnings.add("[discord.yml] Key 'embed.color' has invalid hex color '" + raw
+                    + "'. Fix: Use '#RRGGBB' (e.g. '#FFD700'). Using '#FFD700'.");
+            return 0xFFD700;
+        }
     }
 
     private void validateGuiConfig(YamlConfiguration yaml, List<String> warnings) {
@@ -508,6 +651,17 @@ public final class ConfigManager {
         rawPodiums.set(base + ".top-size", def.getTopSize());
         rawPodiums.set(base + ".tie-policy", def.getTiePolicy().name());
         rawPodiums.set(base + ".conditions", def.getConditions().stream().map(ConditionSpec::getRaw).toList());
+        rawPodiums.set(base + ".discord.enabled", def.isDiscordEnabled());
+        rawPodiums.set(base + ".discord.webhooks", def.getDiscordWebhooks());
+        if (def.getValueFormat() != null) {
+            rawPodiums.set(base + ".value-format.grouping", def.getValueFormat().isGrouping());
+            rawPodiums.set(base + ".value-format.decimals", def.getValueFormat().getDecimals());
+            rawPodiums.set(base + ".value-format.compact", def.getValueFormat().isCompact());
+            rawPodiums.set(base + ".value-format.prefix", def.getValueFormat().getPrefix());
+            rawPodiums.set(base + ".value-format.suffix", def.getValueFormat().getSuffix());
+            rawPodiums.set(base + ".value-format.keep-non-numeric", def.getValueFormat().isKeepNonNumeric());
+            rawPodiums.set(base + ".value-format.fallback", def.getValueFormat().getFallback());
+        }
         rawPodiums.set(base + ".ranks", null);
         for (Map.Entry<String, List<String>> entry : def.getRankRules().entrySet()) {
             rawPodiums.set(base + ".ranks." + entry.getKey(), entry.getValue());

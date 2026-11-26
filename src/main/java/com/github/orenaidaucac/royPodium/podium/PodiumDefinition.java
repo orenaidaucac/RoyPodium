@@ -1,5 +1,6 @@
 package com.github.orenaidaucac.royPodium.podium;
 
+import com.github.orenaidaucac.royPodium.discord.ValueFormatSpec;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -25,6 +26,12 @@ public final class PodiumDefinition {
     private final TiePolicy tiePolicy;
     @Builder.Default
     private final List<ConditionSpec> conditions = List.of();
+    @Builder.Default
+    private final boolean discordEnabled = true;
+    @Builder.Default
+    private final List<String> discordWebhooks = List.of();
+    @Builder.Default
+    private final ValueFormatSpec valueFormat = ValueFormatSpec.DEFAULT;
     /** Ordered map of rank expression ("1", "2", "4-10") -> list of console commands. */
     @Builder.Default
     private final Map<String, List<String>> rankRules = new LinkedHashMap<>();

@@ -7,6 +7,7 @@ import com.github.orenaidaucac.royPodium.gui.GuiManager;
 import com.github.orenaidaucac.royPodium.podium.PlaceholderResolver;
 import com.github.orenaidaucac.royPodium.podium.PodiumDefinition;
 import com.github.orenaidaucac.royPodium.podium.PodiumManager;
+import com.github.orenaidaucac.royPodium.podium.PodiumSnapshot;
 import com.github.orenaidaucac.royPodium.queue.PendingReward;
 import com.github.orenaidaucac.royPodium.queue.QueueManager;
 import com.github.orenaidaucac.royPodium.scheduler.ScheduleSpec;
@@ -72,6 +73,7 @@ public final class PodiumCommand implements CommandExecutor, TabCompleter {
             case "editor", "gui" -> handleEditor(sender);
             case "test" -> handleTest(sender, label, args);
             case "queue" -> handleQueue(sender, label, args);
+            case "webhook" -> handleWebhook(sender, label, args);
             default -> {
                 MainConfig.CustomSubcommand custom = configManager.getMainConfig().getCustomSubcommands().get(sub);
                 if (custom != null) {
@@ -299,6 +301,58 @@ public final class PodiumCommand implements CommandExecutor, TabCompleter {
         }
     }
 
+    private void handleWebhook(CommandSender sender, String label, String[] args) {
+        if (!sender.hasPermission("roypodium.webhook")) {
+            configManager.getMessages().send(sender, "general.no-permission", "{prefix}&cYou do not have permission to use this command.");
+            return;
+        }
+        if (args.length < 3) {
+            configManager.getMessages().send(sender, "webhook.usage",
+                    "{prefix}&cUsage: /{label} webhook <preview|send> <podium> [webhook]",
+                    Map.of("label", label));
+            return;
+        }
+        String mode = args[1].toLowerCase();
+        if (!"preview".equals(mode) && !"send".equals(mode)) {
+            configManager.getMessages().send(sender, "webhook.usage",
+                    "{prefix}&cUsage: /{label} webhook <preview|send> <podium> [webhook]",
+                    Map.of("label", label));
+            return;
+        }
+        String podiumId = args[2];
+        PodiumDefinition def = configManager.getPodiums().get(podiumId);
+        if (def == null) {
+            configManager.getMessages().send(sender, "test.podium-not-found",
+                    "{prefix}&cPodium '&e{id}&c' does not exist.", Map.of("id", podiumId));
+            return;
+        }
+        String webhookOpt = args.length >= 4 ? args[3] : null;
+        boolean sendLive = "send".equals(mode);
+
+        scheduler.runGlobal(() -> {
+            PodiumSnapshot snapshot = placeholderResolver.isPlaceholderApiAvailable()
+                    ? podiumManager.captureSnapshot(def, "webhook-test@" + System.currentTimeMillis())
+                    : createSampleSnapshot(def);
+            if (snapshot.getEntries().isEmpty() && snapshot.getSkippedEntries().isEmpty()) {
+                snapshot = createSampleSnapshot(def);
+            }
+            plugin.getDiscordManager().runTest(sender, def, snapshot, webhookOpt, sendLive);
+        });
+    }
+
+    private PodiumSnapshot createSampleSnapshot(PodiumDefinition def) {
+        return PodiumSnapshot.builder()
+                .podiumId(def.getId())
+                .displayName(def.getDisplayName())
+                .payoutId("sample@" + System.currentTimeMillis())
+                .capturedAt(Instant.now())
+                .entries(List.of(
+                        PodiumSnapshot.Entry.builder().rank(1).playerName("SampleTop1").value("1250").online(true).commands(List.of()).build(),
+                        PodiumSnapshot.Entry.builder().rank(2).playerName("SampleTop2").value("840").online(false).commands(List.of()).build()
+                ))
+                .build();
+    }
+
     private void handleCustomSubcommand(CommandSender sender, MainConfig.CustomSubcommand custom) {
         if (custom.getPermission() != null && !custom.getPermission().isBlank() && !sender.hasPermission(custom.getPermission())) {
             configManager.getMessages().send(sender, "general.no-permission", "{prefix}&cYou do not have permission to use this command.");
@@ -335,6 +389,7 @@ public final class PodiumCommand implements CommandExecutor, TabCompleter {
             if (sender.hasPermission("roypodium.editor")) subs.add("editor");
             if (sender.hasPermission("roypodium.test")) subs.add("test");
             if (sender.hasPermission("roypodium.queue")) subs.add("queue");
+            if (sender.hasPermission("roypodium.webhook")) subs.add("webhook");
             if (sender.hasPermission("roypodium.reload")) subs.add("reload");
             for (MainConfig.CustomSubcommand custom : configManager.getMainConfig().getCustomSubcommands().values()) {
                 if (custom.getPermission() == null || custom.getPermission().isBlank() || sender.hasPermission(custom.getPermission())) {
@@ -353,11 +408,17 @@ public final class PodiumCommand implements CommandExecutor, TabCompleter {
             if ("queue".equalsIgnoreCase(args[0]) && sender.hasPermission("roypodium.queue")) {
                 return filterPrefix(List.of("list", "inspect", "clear"), args[1]);
             }
+            if ("webhook".equalsIgnoreCase(args[0]) && sender.hasPermission("roypodium.webhook")) {
+                return filterPrefix(List.of("preview", "send"), args[1]);
+            }
         }
 
         if (args.length == 3) {
             if ("test".equalsIgnoreCase(args[0]) && sender.hasPermission("roypodium.test")) {
                 return filterPrefix(List.of("simulate", "execute"), args[2]);
+            }
+            if ("webhook".equalsIgnoreCase(args[0]) && sender.hasPermission("roypodium.webhook")) {
+                return filterPrefix(new ArrayList<>(configManager.getPodiums().keySet()), args[2]);
             }
             if ("queue".equalsIgnoreCase(args[0]) && sender.hasPermission("roypodium.queue")) {
                 if ("inspect".equalsIgnoreCase(args[1]) || "clear".equalsIgnoreCase(args[1])) {
@@ -370,6 +431,13 @@ public final class PodiumCommand implements CommandExecutor, TabCompleter {
                     });
                     return filterPrefix(names, args[2]);
                 }
+            }
+        }
+
+        if (args.length == 4 && "webhook".equalsIgnoreCase(args[0]) && sender.hasPermission("roypodium.webhook")) {
+            var discordCfg = configManager.getDiscordConfig();
+            if (discordCfg != null) {
+                return filterPrefix(new ArrayList<>(discordCfg.getWebhooks().keySet()), args[3]);
             }
         }
         return List.of();

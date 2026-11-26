@@ -2,9 +2,11 @@ package com.github.orenaidaucac.royPodium.gui;
 
 import com.github.orenaidaucac.royPodium.config.ConfigManager;
 import com.github.orenaidaucac.royPodium.config.GuiConfig;
+import com.github.orenaidaucac.royPodium.discord.DiscordManager;
 import com.github.orenaidaucac.royPodium.podium.ConditionSpec;
 import com.github.orenaidaucac.royPodium.podium.PodiumDefinition;
 import com.github.orenaidaucac.royPodium.podium.PodiumManager;
+import com.github.orenaidaucac.royPodium.podium.PodiumSnapshot;
 import com.github.orenaidaucac.royPodium.podium.TiePolicy;
 import com.github.orenaidaucac.royPodium.queue.PendingReward;
 import com.github.orenaidaucac.royPodium.queue.QueueManager;
@@ -52,6 +54,7 @@ public final class GuiManager {
     private final PodiumManager podiumManager;
     private final QueueManager queueManager;
     private final ChatInputManager chatInput;
+    private DiscordManager discordManager;
 
     private final Map<UUID, EditorSession> sessions = new ConcurrentHashMap<>();
     private final Set<Inventory> trackedInventories = Collections.newSetFromMap(new ConcurrentHashMap<>());
@@ -66,6 +69,10 @@ public final class GuiManager {
         this.podiumManager = podiumManager;
         this.queueManager = queueManager;
         this.chatInput = chatInput;
+    }
+
+    public void setDiscordManager(DiscordManager discordManager) {
+        this.discordManager = discordManager;
     }
 
     public boolean isTrackedInventory(Inventory inv) {
@@ -270,6 +277,35 @@ public final class GuiManager {
 
         setConfiguredItem(gui, "menus.podium-edit.items.conditions", 20, Material.COMPARATOR, "&eReward Conditions", ph,
                 e -> { playSound(player, "click"); openConditionEdit(player, podiumId); });
+
+        setConfiguredItem(gui, "menus.podium-edit.items.discord-toggle", 22, Material.BELL, "&9Discord Webhook", ph,
+                e -> {
+                    configManager.savePodium(copyPodiumDiscord(def, !def.isDiscordEnabled()));
+                    playSound(player, "save");
+                    openPodiumEdit(player, podiumId);
+                });
+
+        setConfiguredItem(gui, "menus.podium-edit.items.discord-test", 24, Material.PAPER, "&9Test Discord Webhook", ph,
+                e -> {
+                    if (discordManager == null) return;
+                    boolean sendLive = e.getClick() != ClickType.RIGHT;
+                    playSound(player, "click");
+                    scheduler.runAtEntity(player, player::closeInventory);
+                    scheduler.runGlobal(() -> {
+                        PodiumSnapshot snap = podiumManager.captureSnapshot(def, "gui-test@" + System.currentTimeMillis());
+                        if (snap.getEntries().isEmpty() && snap.getSkippedEntries().isEmpty()) {
+                            snap = PodiumSnapshot.builder()
+                                    .podiumId(def.getId())
+                                    .displayName(def.getDisplayName())
+                                    .payoutId("sample@" + System.currentTimeMillis())
+                                    .capturedAt(Instant.now())
+                                    .entries(List.of(PodiumSnapshot.Entry.builder()
+                                            .rank(1).playerName(player.getName()).value("100").online(true).commands(List.of()).build()))
+                                    .build();
+                        }
+                        discordManager.runTest(player, def, snap, null, sendLive);
+                    });
+                });
 
         setConfiguredItem(gui, "menus.podium-edit.items.test-live", 29, Material.BLAZE_POWDER, "&6Run Live Payout Now", ph,
                 e -> {
@@ -812,16 +848,20 @@ public final class GuiManager {
         String sched = (def.getScheduleId() == null || def.getScheduleId().isBlank())
                 ? cfg.getString("labels.no-schedule", "&cNone")
                 : def.getScheduleId();
-        return Map.of(
-                "id", def.getId(),
-                "display_name", ColorUtil.colorize(def.getDisplayName()),
-                "status", status,
-                "schedule", sched,
-                "top_size", String.valueOf(def.getTopSize()),
-                "player_papi", def.getPlayerPlaceholder(),
-                "value_papi", def.getValuePlaceholder(),
-                "rank_count", String.valueOf(def.getRankRules().size()),
-                "condition_count", String.valueOf(def.getConditions() == null ? 0 : def.getConditions().size())
+        String discordStatus = def.isDiscordEnabled()
+                ? cfg.getString("labels.enabled-true", "&aEnabled")
+                : cfg.getString("labels.enabled-false", "&cDisabled");
+        return Map.ofEntries(
+                Map.entry("id", def.getId()),
+                Map.entry("display_name", ColorUtil.colorize(def.getDisplayName())),
+                Map.entry("status", status),
+                Map.entry("schedule", sched),
+                Map.entry("top_size", String.valueOf(def.getTopSize())),
+                Map.entry("player_papi", def.getPlayerPlaceholder()),
+                Map.entry("value_papi", def.getValuePlaceholder()),
+                Map.entry("rank_count", String.valueOf(def.getRankRules().size())),
+                Map.entry("condition_count", String.valueOf(def.getConditions() == null ? 0 : def.getConditions().size())),
+                Map.entry("discord_status", discordStatus)
         );
     }
 
@@ -858,6 +898,9 @@ public final class GuiManager {
                 .topSize(topSize)
                 .tiePolicy(src.getTiePolicy())
                 .conditions(src.getConditions())
+                .discordEnabled(src.isDiscordEnabled())
+                .discordWebhooks(src.getDiscordWebhooks())
+                .valueFormat(src.getValueFormat())
                 .rankRules(rankRules)
                 .build();
     }
@@ -873,6 +916,27 @@ public final class GuiManager {
                 .topSize(src.getTopSize())
                 .tiePolicy(src.getTiePolicy())
                 .conditions(List.copyOf(conditions))
+                .discordEnabled(src.isDiscordEnabled())
+                .discordWebhooks(src.getDiscordWebhooks())
+                .valueFormat(src.getValueFormat())
+                .rankRules(src.getRankRules())
+                .build();
+    }
+
+    private PodiumDefinition copyPodiumDiscord(PodiumDefinition src, boolean discordEnabled) {
+        return PodiumDefinition.builder()
+                .id(src.getId())
+                .enabled(src.isEnabled())
+                .displayName(src.getDisplayName())
+                .scheduleId(src.getScheduleId())
+                .playerPlaceholder(src.getPlayerPlaceholder())
+                .valuePlaceholder(src.getValuePlaceholder())
+                .topSize(src.getTopSize())
+                .tiePolicy(src.getTiePolicy())
+                .conditions(src.getConditions())
+                .discordEnabled(discordEnabled)
+                .discordWebhooks(src.getDiscordWebhooks())
+                .valueFormat(src.getValueFormat())
                 .rankRules(src.getRankRules())
                 .build();
     }

@@ -4,7 +4,7 @@
 # Every GUI title, slot, material, item name, lore, sound, and label can be
 # customized or translated here without touching code.
 # Supports MiniMessage, Hex (&#RRGGBB), and Legacy (&a, §a) mixed in one line.
-config-version: 3
+config-version: 4
 
 sounds:
   click: "UI_BUTTON_CLICK"
@@ -154,6 +154,21 @@ menus:
         lore:
           - "&7Active conditions: &e{condition_count}"
           - "&eClick to manage value conditions"
+      discord-toggle:
+        slot: 22
+        material: "BELL"
+        name: "&9Discord Webhook"
+        lore:
+          - "&7Status: {discord_status}"
+          - "&eClick to toggle for this podium"
+      discord-test:
+        slot: 24
+        material: "PAPER"
+        name: "&9Test Discord Webhook"
+        lore:
+          - "&7Sends a test embed using current"
+          - "&7rankings without awarding rewards."
+          - "&eLeft-Click: Send &8| &bRight-Click: Preview"
       test-live:
         slot: 29
         material: "BLAZE_POWDER"

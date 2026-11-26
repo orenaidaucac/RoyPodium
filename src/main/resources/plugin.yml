@@ -29,6 +29,7 @@ permissions:
       roypodium.queue: true
       roypodium.editor: true
       roypodium.status: true
+      roypodium.webhook: true
   roypodium.reload:
     description: Allows reloading RoyPodium configuration.
     default: op
@@ -43,4 +44,7 @@ permissions:
     default: op
   roypodium.status:
     description: Allows viewing RoyPodium status and next scheduled payouts.
+    default: op
+  roypodium.webhook:
+    description: Allows previewing and testing Discord webhook notifications.
     default: op

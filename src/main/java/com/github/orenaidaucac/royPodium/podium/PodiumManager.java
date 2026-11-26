@@ -2,6 +2,7 @@ package com.github.orenaidaucac.royPodium.podium;
 
 import com.github.orenaidaucac.royPodium.config.ConfigManager;
 import com.github.orenaidaucac.royPodium.config.MainConfig;
+import com.github.orenaidaucac.royPodium.discord.DiscordManager;
 import com.github.orenaidaucac.royPodium.queue.CommandDispatchQueue;
 import com.github.orenaidaucac.royPodium.queue.PendingReward;
 import com.github.orenaidaucac.royPodium.queue.QueueManager;
@@ -36,6 +37,7 @@ public final class PodiumManager {
     private final PlaceholderResolver placeholderResolver;
     private final CommandDispatchQueue dispatcher;
     private final QueueManager queueManager;
+    private DiscordManager discordManager;
 
     public PodiumManager(ConfigManager configManager,
                          PlaceholderResolver placeholderResolver,
@@ -45,6 +47,10 @@ public final class PodiumManager {
         this.placeholderResolver = placeholderResolver;
         this.dispatcher = dispatcher;
         this.queueManager = queueManager;
+    }
+
+    public void setDiscordManager(DiscordManager discordManager) {
+        this.discordManager = discordManager;
     }
 
     /**
@@ -204,6 +210,10 @@ public final class PodiumManager {
                             "online", String.valueOf(onlineCount),
                             "offline", String.valueOf(offlineCount)
                     ));
+        }
+
+        if (discordManager != null) {
+            discordManager.notifyPayout(def, snapshot, onlineCount, offlineCount);
         }
     }
 

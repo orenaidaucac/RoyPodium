@@ -17,7 +17,11 @@
 # Optional 'conditions' (evaluated at snapshot time against value-placeholder):
 #   Operators: =, !=, >, <, >=, <= (or eq, ne, gt, lt, gte, lte)
 #   Example:   conditions: [">= 5", "< 10000"]
-config-version: 2
+#
+# Optional 'value-format' (display-only formatting for Discord embeds):
+#   grouping: true/false, decimals: -1 (auto) or 0..10, compact: true/false (K/M/B/T),
+#   prefix: "$", suffix: " kills", keep-non-numeric: true, fallback: "N/A"
+config-version: 4
 
 podiums:
   kills_daily:
@@ -32,6 +36,17 @@ podiums:
     tie-policy: "ALLOW_TIES"
     conditions:
       - ">= 1"
+    discord:
+      enabled: true
+      webhooks: []
+    value-format:
+      grouping: true
+      decimals: 0
+      compact: false
+      prefix: ""
+      suffix: " kills"
+      keep-non-numeric: true
+      fallback: "N/A"
     ranks:
       "1":
         - "eco give {player} 5000"

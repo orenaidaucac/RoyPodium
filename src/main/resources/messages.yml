@@ -3,7 +3,7 @@
 # ==============================================================================
 # Supports MiniMessage (<gold>, <gradient:#ff0000:#00ff00>), Hex (&#RRGGBB),
 # and Legacy (&a, §a, &l) mixed together on the same line.
-config-version: 2
+config-version: 4
 
 prefix: "&8[&6RoyPodium&8] &r"
 
@@ -23,6 +23,7 @@ help:
     - "&e/{label} status &7- View plugin & schedule status"
     - "&e/{label} editor &7- Open the in-game GUI editor"
     - "&e/{label} test <podium|all> [simulate|execute] &7- Test a podium payout"
+    - "&e/{label} webhook <preview|send> <podium> [webhook] &7- Preview or test Discord webhook"
     - "&e/{label} queue list [page] &7- List players with pending rewards"
     - "&e/{label} queue inspect <player|uuid> &7- View pending rewards for a player"
     - "&e/{label} queue clear <player|uuid|all> &7- Clear pending rewards"
@@ -67,3 +68,15 @@ editor:
   chat-prompt: "{prefix}&eType the new value in chat (or type &ccancel&e to abort):"
   chat-cancelled: "{prefix}&cInput cancelled."
   chat-updated: "{prefix}&aUpdated &e{field}&a to &f{value}&a."
+
+webhook:
+  usage: "{prefix}&cUsage: /{label} webhook <preview|send> <podium> [webhook]"
+  disabled: "{prefix}&cDiscord webhooks are disabled in discord.yml (or for this podium)."
+  not-found: "{prefix}&cWebhook profile '&e{webhook}&c' does not exist or has an invalid URL."
+  cooldown: "{prefix}&cPlease wait &e{seconds}s&c before sending another test webhook."
+  preview-header: "&8&m----&r &9Discord Preview: {podium} &7({webhook}) &8&m----"
+  preview-line: "&7{line}"
+  preview-footer: "&8&m----------------------------------------"
+  sending: "{prefix}&7Sending test Discord webhook '&e{webhook}&7' for podium &e{podium}&7..."
+  send-success: "{prefix}&aTest webhook '&e{webhook}&a' sent successfully (HTTP &e{code}&a)."
+  send-failed: "{prefix}&cFailed to send test webhook '&e{webhook}&c': &f{error}"

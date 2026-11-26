@@ -3,6 +3,7 @@ package com.github.orenaidaucac.royPodium;
 import com.github.orenaidaucac.royPodium.command.CommandAliasManager;
 import com.github.orenaidaucac.royPodium.command.PodiumCommand;
 import com.github.orenaidaucac.royPodium.config.ConfigManager;
+import com.github.orenaidaucac.royPodium.discord.DiscordManager;
 import com.github.orenaidaucac.royPodium.gui.ChatInputManager;
 import com.github.orenaidaucac.royPodium.gui.GuiManager;
 import com.github.orenaidaucac.royPodium.gui.GuiSecurityListener;
@@ -34,6 +35,7 @@ public final class RoyPodium extends JavaPlugin {
     @Getter private GuiManager guiManager;
     @Getter private CommandAliasManager aliasManager;
     @Getter private MetricsManager metricsManager;
+    @Getter private DiscordManager discordManager;
     private PodiumCommand podiumCommand;
 
     @Override
@@ -56,9 +58,12 @@ public final class RoyPodium extends JavaPlugin {
         this.queueManager.load();
 
         this.podiumManager = new PodiumManager(configManager, placeholderResolver, dispatchQueue, queueManager);
+        this.discordManager = new DiscordManager(configManager, schedulerAdapter, getLogger());
+        this.podiumManager.setDiscordManager(discordManager);
         this.scheduleManager = new ScheduleManager(this, configManager, schedulerAdapter, podiumManager);
         this.chatInputManager = new ChatInputManager(configManager, schedulerAdapter);
         this.guiManager = new GuiManager(configManager, schedulerAdapter, podiumManager, queueManager, chatInputManager);
+        this.guiManager.setDiscordManager(discordManager);
         this.aliasManager = new CommandAliasManager(this);
         this.metricsManager = new MetricsManager(this, configManager);
         this.metricsManager.setPapiAvailable(placeholderResolver.isPlaceholderApiAvailable());
@@ -76,6 +81,9 @@ public final class RoyPodium extends JavaPlugin {
     @Override
     public void onDisable() {
         stopServices(false);
+        if (discordManager != null) {
+            discordManager.shutdown();
+        }
         if (metricsManager != null) {
             metricsManager.shutdown();
         }
@@ -96,6 +104,9 @@ public final class RoyPodium extends JavaPlugin {
         stopServices(true);
         boolean clean = configManager.loadAll();
         queueManager.load();
+        if (discordManager != null) {
+            discordManager.reload();
+        }
         if (metricsManager != null && placeholderResolver != null) {
             metricsManager.setPapiAvailable(placeholderResolver.isPlaceholderApiAvailable());
         }
