@@ -6,6 +6,7 @@ import com.github.orenaidaucac.royPodium.config.ConfigManager;
 import com.github.orenaidaucac.royPodium.gui.ChatInputManager;
 import com.github.orenaidaucac.royPodium.gui.GuiManager;
 import com.github.orenaidaucac.royPodium.gui.GuiSecurityListener;
+import com.github.orenaidaucac.royPodium.metrics.MetricsManager;
 import com.github.orenaidaucac.royPodium.podium.PlaceholderResolver;
 import com.github.orenaidaucac.royPodium.podium.PodiumManager;
 import com.github.orenaidaucac.royPodium.queue.CommandDispatchQueue;
@@ -32,6 +33,7 @@ public final class RoyPodium extends JavaPlugin {
     @Getter private ChatInputManager chatInputManager;
     @Getter private GuiManager guiManager;
     @Getter private CommandAliasManager aliasManager;
+    @Getter private MetricsManager metricsManager;
     private PodiumCommand podiumCommand;
 
     @Override
@@ -58,9 +60,12 @@ public final class RoyPodium extends JavaPlugin {
         this.chatInputManager = new ChatInputManager(configManager, schedulerAdapter);
         this.guiManager = new GuiManager(configManager, schedulerAdapter, podiumManager, queueManager, chatInputManager);
         this.aliasManager = new CommandAliasManager(this);
+        this.metricsManager = new MetricsManager(this, configManager);
+        this.metricsManager.setPapiAvailable(placeholderResolver.isPlaceholderApiAvailable());
 
         registerListenersAndCommands();
         startServices();
+        this.metricsManager.start();
 
         getLogger().info("RoyPodium v" + getDescription().getVersion() + " enabled ("
                 + (SchedulerAdapter.isFolia() ? "Folia" : "Bukkit/Paper") + " mode, "
@@ -71,6 +76,9 @@ public final class RoyPodium extends JavaPlugin {
     @Override
     public void onDisable() {
         stopServices(false);
+        if (metricsManager != null) {
+            metricsManager.shutdown();
+        }
         if (aliasManager != null) {
             aliasManager.unregisterAll();
         }
@@ -88,6 +96,9 @@ public final class RoyPodium extends JavaPlugin {
         stopServices(true);
         boolean clean = configManager.loadAll();
         queueManager.load();
+        if (metricsManager != null && placeholderResolver != null) {
+            metricsManager.setPapiAvailable(placeholderResolver.isPlaceholderApiAvailable());
+        }
         if (aliasManager != null && podiumCommand != null) {
             aliasManager.reloadAliases(configManager.getMainConfig().getCommandAliases(), podiumCommand);
         }

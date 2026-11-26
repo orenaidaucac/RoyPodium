@@ -63,6 +63,10 @@
                   <pattern>net.kyori</pattern>
                   <shadedPattern>com.github.orenaidaucac.royPodium.libs.kyori</shadedPattern>
                 </relocation>
+                <relocation>
+                  <pattern>org.bstats</pattern>
+                  <shadedPattern>com.github.orenaidaucac.royPodium.libs.bstats</shadedPattern>
+                </relocation>
               </relocations>
               <filters>
                 <filter>

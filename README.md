@@ -30,6 +30,7 @@
 - [🖥️ In-Game GUI Editor](#️-in-game-gui-editor)
 - [🧪 Testing & Simulation](#-testing--simulation)
 - [⚡ Performance & Anti-Lag](#-performance--anti-lag)
+- [📊 bStats Metrics](#-bstats-metrics)
 - [📜 Commands & Permissions](#-commands--permissions)
 - [❓ FAQ & Troubleshooting](#-faq--troubleshooting)
 - [📝 Update Changelog](#-update-changelog)
@@ -250,6 +251,37 @@ Preview any podium without executing real commands or modifying queues:
 
 ---
 
+## 📊 bStats Metrics
+
+RoyPodium uses **[bStats](https://bstats.org/plugin/bukkit/RoyPodium/35686)** (Plugin ID: **`35686`**) to collect anonymous, aggregate usage statistics that help guide compatibility and feature improvements across Minecraft versions and server platforms.
+
+<div align="center">
+
+[![bStats Metrics](https://bstats.org/signatures/bukkit/RoyPodium.svg)](https://bstats.org/plugin/bukkit/RoyPodium/35686)
+
+*View live public charts at [bstats.org/plugin/bukkit/RoyPodium/35686](https://bstats.org/plugin/bukkit/RoyPodium/35686).*
+*(Note: Charts will populate automatically once servers running RoyPodium begin reporting data.)*
+
+</div>
+
+### Collected Custom Charts
+| Chart ID | Description | Reported Values |
+| :--- | :--- | :--- |
+| `podium_count_bucket` | Number of configured leaderboards | `0`, `1-3`, `4-10`, `11+` |
+| `schedule_count_bucket` | Number of configured schedules | `0`, `1-3`, `4-10`, `11+` |
+| `uses_conditions` | Whether any podium uses value conditions | `Yes`, `No` |
+| `uses_custom_aliases` | Whether custom `command-aliases` are configured | `Yes`, `No` |
+| `missed_schedule_policy` | Active missed-schedule recovery policy | `SKIP`, `RUN_LATEST`, `RUN_ALL` |
+| `placeholderapi_present` | Whether PlaceholderAPI is installed on the server | `Yes`, `No` |
+| `server_scheduler_mode` | Active scheduler backend | `Folia`, `Bukkit/Paper` |
+
+> [!NOTE]
+> **Privacy Commitment:** RoyPodium **never** collects player names, UUIDs, reward commands, podium names, IP addresses, or server file paths. Only anonymous, low-cardinality aggregate totals are sent.
+>
+> **How to Opt Out:** You can disable bStats globally at any time by setting `enabled: false` in `plugins/bStats/config.yml` and restarting your server. RoyPodium strictly respects this setting.
+
+---
+
 ## 📜 Commands & Permissions
 
 Main command: `/roypodium` (built-in alias: `/podium`, plus any custom `command-aliases` in `config.yml`).
@@ -293,6 +325,7 @@ If `conditions:` are configured on that podium, `/roypodium test <podium> simula
 ## 📝 Update Changelog
 
 ### Latest Update (`2026.1`)
+- **Added** anonymous **bStats** metrics integration (Plugin ID `35686`, relocated & Folia-safe) with 7 low-cardinality custom charts and full opt-out support.
 - **Added** unlimited dynamic `command-aliases` in `config.yml` with conflict protection, permission/tab-complete parity, and hot-reload support.
 - **Added** unified MiniMessage + Hex + Legacy color engine across all messages, GUI text, and test output, with anti-injection escaping for player names and PlaceholderAPI values.
 - **Added** direct manual editing support for `data/pending-rewards.yml` with English documentation, friendly defaults, reload support, and preservation of malformed entries.

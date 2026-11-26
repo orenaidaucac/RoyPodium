@@ -76,6 +76,14 @@
             <version>4.20.0</version>
         </dependency>
 
+        <!-- bStats Metrics (shaded & relocated) -->
+        <dependency>
+            <groupId>org.bstats</groupId>
+            <artifactId>bstats-bukkit</artifactId>
+            <version>3.2.1</version>
+            <scope>compile</scope>
+        </dependency>
+
         <!-- Unit Testing -->
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -152,6 +160,10 @@
                                 <relocation>
                                     <pattern>net.kyori</pattern>
                                     <shadedPattern>com.github.orenaidaucac.royPodium.libs.kyori</shadedPattern>
+                                </relocation>
+                                <relocation>
+                                    <pattern>org.bstats</pattern>
+                                    <shadedPattern>com.github.orenaidaucac.royPodium.libs.bstats</shadedPattern>
                                 </relocation>
                             </relocations>
                             <filters>
