@@ -1,17 +1,18 @@
 # ==============================================================================
 # RoyPodium - Discord Webhook Configuration (discord.yml)
 # ==============================================================================
-# Send rich Discord Embed notifications after each scheduled leaderboard payout.
+# Send rich Discord notifications after each scheduled leaderboard payout.
 # SECURITY NOTE: Keep your webhook URLs secret! RoyPodium never logs or displays
 # full webhook URLs in console, chat, GUI, or bStats.
-config-version: 4
+config-version: 5
 
 # Global toggle for Discord webhook notifications.
 enabled: false
 
-# Default webhook profile name (from 'webhooks:' below) used when a podium
-# does not specify its own 'discord.webhooks' list.
+# Default webhook profile and template used when a podium omits its own overrides.
 default-webhook: "default"
+default-template: "default"
+fallback-template: "minimal"
 
 # Define unlimited named webhook profiles.
 webhooks:
@@ -20,57 +21,127 @@ webhooks:
     url: "https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN"
     username: "RoyPodium"
     avatar-url: ""
+    # Optional per-webhook template override
+    template: ""
+    # Optional: post into an existing thread/forum post by ID (?thread_id=...)
+    thread-id: ""
+    # Optional: create a new Forum/Media post (Forum/Media channels only!)
+    thread-name: ""
+    applied-tags: []
 
 rate-limit:
-  # HTTP request timeout in seconds.
   timeout-seconds: 10
-  # Maximum retry attempts on HTTP 429 (rate limit) or 5xx errors.
   max-retries: 3
-  # Minimum delay (ms) between consecutive webhook HTTP requests.
   min-interval-ms: 1000
-  # Maximum seconds to wait for queued webhook messages to flush on server shutdown/reload.
   shutdown-drain-seconds: 5
 
 test:
-  # Cooldown (seconds) between /roypodium webhook send commands.
   cooldown-seconds: 10
 
 player-avatar:
-  # Whether to allow player head avatar URLs in embed thumbnails.
   enabled: true
   # Customizable avatar URL template ({player} or {uuid}).
   url-template: "https://mc-heads.net/avatar/{player}/128"
 
-# Configurable delivery status labels shown in Discord embeds.
 status-labels:
   online: "Delivered"
   offline: "Queued (Offline)"
   skipped: "Skipped ({reason})"
 
-# Configurable rank icons/medals for leaderboard positions.
 rank-icons:
   "1": "🥇"
   "2": "🥈"
   "3": "🥉"
   default: "#{rank}"
 
-# Embed layout template.
-# Available variables:
+# ==============================================================================
+# Named Message & Embed Templates (templates:)
+# ==============================================================================
+# Available variables in text, URLs, and fields:
 #   {podium}, {podium_name}, {date}, {time}, {timezone},
 #   {online_count}, {offline_count}, {skipped_count}, {total_count},
-#   {rank}, {rank_icon}, {player}, {value}, {status}, {reason}
-# PlaceholderAPI placeholders are also supported in title, description, and footer.
-embed:
-  color: "#FFD700"
-  title: "{podium_name} — Payout Results"
-  description: "Scheduled payout completed at {date} {time} ({timezone})."
-  include-timestamp: true
-  # Thumbnail mode: NONE, TOP_1_PLAYER, CUSTOM_URL
-  thumbnail-mode: "TOP_1_PLAYER"
-  thumbnail-url: ""
-  field-title: "Leaderboard"
-  entry-format: "{rank_icon} **#{rank}** {player} — **{value}** *({status})*"
-  skipped-format: "{rank_icon} **#{rank}** {player} — {value} *(Skipped: {reason})*"
-  include-skipped: true
-  empty-message: "No eligible players were rewarded in this payout."
-  footer: "RoyPodium • {online_count} online • {offline_count} queued • {skipped_count} skipped"
+#   {timestamp}, {timestamp_relative}, {timestamp_full}, {timestamp_short},
+#   {timestamp_date}, {timestamp_time}
+# Per-entry variables: {rank}, {rank_icon}, {player}, {value}, {status}, {reason}
+# PlaceholderAPI placeholders (%...%) are also supported!
+#
+# Colors accept '#RRGGBB', decimal integers, or named colors:
+#   GOLD, RED, GREEN, BLUE, AQUA, YELLOW, PURPLE, ORANGE, PINK, WHITE, GRAY, BLURPLE
+templates:
+  default:
+    # Layout modes: LIST_FIELD (grouped), PER_ENTRY_FIELD, PER_ENTRY_EMBED
+    layout-mode: "LIST_FIELD"
+    # Overflow policy when exceeding Discord limits: SPLIT_MESSAGE or TRUNCATE
+    overflow-policy: "SPLIT_MESSAGE"
+    content: ""
+    tts: false
+    suppress-embeds: false
+    suppress-notifications: false
+    mention-roles: []
+    mention-users: []
+    author:
+      name: ""
+      url: ""
+      icon-url: ""
+    color: "#FFD700"
+    title: "{podium_name} — Payout Results"
+    title-url: ""
+    description: "Scheduled payout completed {timestamp_relative} ({date} {time} {timezone})."
+    include-timestamp: true
+    thumbnail-mode: "TOP_1_PLAYER"
+    thumbnail-url: ""
+    image-url: ""
+    field-title: "Leaderboard"
+    inline-entry-fields: false
+    entry-formats:
+      "1": "{rank_icon} **#{rank} {player}** — **{value}** *({status})*"
+      "2": "{rank_icon} **#{rank}** {player} — **{value}** *({status})*"
+      "3": "{rank_icon} **#{rank}** {player} — **{value}** *({status})*"
+      default: "{rank_icon} **#{rank}** {player} — {value} *({status})*"
+    skipped-format: "{rank_icon} **#{rank}** {player} — {value} *(Skipped: {reason})*"
+    include-skipped: true
+    empty-message: "No eligible players were rewarded in this payout."
+    footer-text: "RoyPodium • {online_count} online • {offline_count} queued • {skipped_count} skipped"
+    footer-icon-url: ""
+    custom-fields: []
+    link-buttons: []
+
+  compact:
+    extends: "default"
+    description: ""
+    thumbnail-mode: "NONE"
+    include-skipped: false
+    footer-text: "{podium_name} • {timestamp_short}"
+
+  detailed:
+    extends: "default"
+    layout-mode: "PER_ENTRY_FIELD"
+    inline-entry-fields: true
+    field-title: "{rank_icon} Rank #{rank}"
+    entry-formats:
+      default: "**{player}**\nScore: `{value}`\nStatus: *{status}*"
+    custom-fields:
+      - name: "Summary"
+        value: "Online: **{online_count}** | Offline: **{offline_count}** | Skipped: **{skipped_count}**"
+        inline: false
+
+  showcase:
+    extends: "default"
+    layout-mode: "PER_ENTRY_EMBED"
+    rank-colors:
+      "1": "GOLD"
+      "2": "GRAY"
+      "3": "ORANGE"
+      default: "BLURPLE"
+    entry-embed-title: "{rank_icon} Rank #{rank} — {player}"
+    entry-embed-description: "Score: **{value}**\nStatus: *{status}*"
+
+  minimal:
+    layout-mode: "LIST_FIELD"
+    overflow-policy: "TRUNCATE"
+    color: "GREEN"
+    title: "{podium_name}"
+    description: "Payout completed {timestamp_relative}."
+    thumbnail-mode: "NONE"
+    include-skipped: false
+    footer-text: "RoyPodium"

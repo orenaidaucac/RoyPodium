@@ -1,5 +1,7 @@
 package com.github.orenaidaucac.royPodium.config;
 
+import com.github.orenaidaucac.royPodium.discord.DiscordEmbedBuilder;
+import com.github.orenaidaucac.royPodium.discord.DiscordTemplate;
 import com.github.orenaidaucac.royPodium.discord.DiscordWebhookValidator;
 import com.github.orenaidaucac.royPodium.discord.ValueFormatSpec;
 import com.github.orenaidaucac.royPodium.podium.ConditionSpec;
@@ -42,7 +44,7 @@ import java.util.logging.Logger;
  */
 public final class ConfigManager {
 
-    private static final int CURRENT_CONFIG_VERSION = 4;
+    private static final int CURRENT_CONFIG_VERSION = 5;
     private static final List<String> CONFIG_FILES = List.of(
             "config.yml", "messages.yml", "schedules.yml", "podiums.yml", "gui.yml", "discord.yml"
     );
@@ -449,6 +451,13 @@ public final class ConfigManager {
             if (!singleWh.isBlank() && !discordWebhooks.contains(singleWh)) {
                 discordWebhooks.add(singleWh);
             }
+            String discordTemplate = entry.getString("discord.template", "");
+            Integer discordColor = entry.contains("discord.color")
+                    ? parseColorValue(entry.getString("discord.color"), "podiums.yml", "podiums." + id + ".discord.color", warnings)
+                    : null;
+            String discordThreadId = entry.getString("discord.thread-id", "");
+            String discordThreadName = entry.getString("discord.thread-name", "");
+            List<String> discordAppliedTags = entry.getStringList("discord.applied-tags");
 
             ValueFormatSpec valueFormat = ValueFormatSpec.builder()
                     .grouping(entry.getBoolean("value-format.grouping", true))
@@ -480,6 +489,11 @@ public final class ConfigManager {
                     .conditions(List.copyOf(conditions))
                     .discordEnabled(discordEnabled)
                     .discordWebhooks(List.copyOf(discordWebhooks))
+                    .discordTemplate(discordTemplate)
+                    .discordColor(discordColor)
+                    .discordThreadId(discordThreadId)
+                    .discordThreadName(discordThreadName)
+                    .discordAppliedTags(List.copyOf(discordAppliedTags))
                     .valueFormat(valueFormat)
                     .rankRules(rankRules)
                     .build());
@@ -490,6 +504,8 @@ public final class ConfigManager {
     private DiscordConfig parseDiscordConfig(YamlConfiguration yaml, List<String> warnings) {
         boolean enabled = yaml.getBoolean("enabled", false);
         String defaultWebhook = yaml.getString("default-webhook", "default");
+        String defaultTemplate = yaml.getString("default-template", "default");
+        String fallbackTemplate = yaml.getString("fallback-template", "minimal");
 
         Map<String, DiscordConfig.WebhookProfile> webhooks = new LinkedHashMap<>();
         ConfigurationSection whSec = yaml.getConfigurationSection("webhooks");
@@ -516,6 +532,10 @@ public final class ConfigManager {
                         .maskedUrl(masked)
                         .username(entry.getString("username", "RoyPodium"))
                         .avatarUrl(entry.getString("avatar-url", ""))
+                        .template(entry.getString("template", ""))
+                        .threadId(entry.getString("thread-id", ""))
+                        .threadName(entry.getString("thread-name", ""))
+                        .appliedTags(List.copyOf(entry.getStringList("applied-tags")))
                         .build());
             }
         }
@@ -546,20 +566,15 @@ public final class ConfigManager {
             }
         }
 
-        int embedColor = parseHexColor(yaml.getString("embed.color", "#FFD700"), warnings);
-        DiscordConfig.ThumbnailMode thumbMode = DiscordConfig.ThumbnailMode.TOP_1_PLAYER;
-        String thumbRaw = yaml.getString("embed.thumbnail-mode", "TOP_1_PLAYER").trim().toUpperCase();
-        try {
-            thumbMode = DiscordConfig.ThumbnailMode.valueOf(thumbRaw);
-        } catch (IllegalArgumentException ex) {
-            warnings.add("[discord.yml] Key 'embed.thumbnail-mode' has invalid value '" + thumbRaw
-                    + "'. Fix: Use NONE, TOP_1_PLAYER, or CUSTOM_URL. Using TOP_1_PLAYER.");
-        }
+        Map<String, DiscordTemplate> templates = parseDiscordTemplates(yaml, warnings);
 
         return DiscordConfig.builder()
                 .enabled(enabled)
                 .defaultWebhook(defaultWebhook)
+                .defaultTemplate(defaultTemplate)
+                .fallbackTemplate(fallbackTemplate)
                 .webhooks(Map.copyOf(webhooks))
+                .templates(Map.copyOf(templates))
                 .timeoutSeconds(timeoutSec)
                 .maxRetries(maxRetries)
                 .minIntervalMs(minIntervalMs)
@@ -572,35 +587,229 @@ public final class ConfigManager {
                 .statusSkipped(statusSkipped)
                 .rankIcons(Map.copyOf(rankIcons))
                 .defaultRankIcon(defaultIcon)
-                .embedColor(embedColor)
-                .embedTitle(yaml.getString("embed.title", "{podium_name} — Payout Results"))
-                .embedDescription(yaml.getString("embed.description", "Scheduled payout completed at {date} {time} ({timezone})."))
-                .includeTimestamp(yaml.getBoolean("embed.include-timestamp", true))
-                .thumbnailMode(thumbMode)
-                .thumbnailUrl(yaml.getString("embed.thumbnail-url", ""))
-                .fieldTitle(yaml.getString("embed.field-title", "Leaderboard"))
-                .entryFormat(yaml.getString("embed.entry-format", "{rank_icon} **#{rank}** {player} — **{value}** *({status})*"))
-                .skippedFormat(yaml.getString("embed.skipped-format", "{rank_icon} **#{rank}** {player} — {value} *(Skipped: {reason})*"))
-                .includeSkipped(yaml.getBoolean("embed.include-skipped", true))
-                .emptyMessage(yaml.getString("embed.empty-message", "No eligible players were rewarded in this payout."))
-                .footer(yaml.getString("embed.footer", "RoyPodium • {online_count} online • {offline_count} queued • {skipped_count} skipped"))
                 .build();
     }
 
-    private int parseHexColor(String raw, List<String> warnings) {
-        if (raw == null || raw.isBlank()) {
-            return 0xFFD700;
+    private Map<String, DiscordTemplate> parseDiscordTemplates(YamlConfiguration yaml, List<String> warnings) {
+        Map<String, DiscordTemplate> resolved = new LinkedHashMap<>();
+        ConfigurationSection tplRoot = yaml.getConfigurationSection("templates");
+
+        // Backward compatibility: if an older config only has top-level 'embed:', treat it as 'default'
+        if (tplRoot == null && yaml.isConfigurationSection("embed")) {
+            DiscordTemplate legacy = parseTemplateSection("default", yaml.getConfigurationSection("embed"),
+                    DiscordTemplate.builder().id("default").build(), warnings);
+            resolved.put("default", legacy);
+            resolved.put("minimal", DiscordTemplate.minimalFallback());
+            return resolved;
         }
-        String cleaned = raw.trim();
-        if (cleaned.startsWith("#")) {
-            cleaned = cleaned.substring(1);
+
+        if (tplRoot == null) {
+            resolved.put("default", DiscordTemplate.builder().id("default").build());
+            resolved.put("minimal", DiscordTemplate.minimalFallback());
+            return resolved;
+        }
+
+        for (String id : tplRoot.getKeys(false)) {
+            resolveTemplateRecursive(id, tplRoot, resolved, new HashSet<>(), warnings);
+        }
+        if (!resolved.containsKey("minimal")) {
+            resolved.put("minimal", DiscordTemplate.minimalFallback());
+        }
+        for (DiscordTemplate tpl : resolved.values()) {
+            warnings.addAll(DiscordEmbedBuilder.validateTemplate(tpl));
+        }
+        return resolved;
+    }
+
+    private DiscordTemplate resolveTemplateRecursive(String id,
+                                                     ConfigurationSection root,
+                                                     Map<String, DiscordTemplate> resolved,
+                                                     Set<String> visiting,
+                                                     List<String> warnings) {
+        if (resolved.containsKey(id)) {
+            return resolved.get(id);
+        }
+        ConfigurationSection sec = root.getConfigurationSection(id);
+        if (sec == null) {
+            warnings.add("[discord.yml] Key 'templates." + id + "' must be a YAML section.");
+            return DiscordTemplate.minimalFallback();
+        }
+        if (!visiting.add(id)) {
+            warnings.add("[discord.yml] Circular template inheritance detected involving '" + id + "'. Fix: Remove circular 'extends' reference.");
+            return DiscordTemplate.minimalFallback();
+        }
+
+        DiscordTemplate base = DiscordTemplate.builder().id(id).build();
+        String parentId = sec.getString("extends", "");
+        if (!parentId.isBlank()) {
+            if (!root.isConfigurationSection(parentId)) {
+                warnings.add("[discord.yml] Template '" + id + "' extends unknown template '" + parentId + "'. Using default base.");
+            } else {
+                base = resolveTemplateRecursive(parentId, root, resolved, visiting, warnings);
+            }
+        }
+        visiting.remove(id);
+
+        DiscordTemplate built = parseTemplateSection(id, sec, base, warnings);
+        resolved.put(id, built);
+        return built;
+    }
+
+    private DiscordTemplate parseTemplateSection(String id,
+                                                 ConfigurationSection sec,
+                                                 DiscordTemplate base,
+                                                 List<String> warnings) {
+        DiscordTemplate.DiscordTemplateBuilder b = base.toBuilder().id(id)
+                .extendsTemplate(sec.getString("extends", ""));
+
+        if (sec.contains("layout-mode")) {
+            String raw = sec.getString("layout-mode", "LIST_FIELD").trim().toUpperCase();
+            try {
+                b.layoutMode(DiscordTemplate.LayoutMode.valueOf(raw));
+            } catch (IllegalArgumentException ex) {
+                warnings.add("[discord.yml] Key 'templates." + id + ".layout-mode' has invalid value '" + raw
+                        + "'. Fix: Use LIST_FIELD, PER_ENTRY_FIELD, or PER_ENTRY_EMBED.");
+            }
+        }
+        if (sec.contains("overflow-policy")) {
+            String raw = sec.getString("overflow-policy", "SPLIT_MESSAGE").trim().toUpperCase();
+            try {
+                b.overflowPolicy(DiscordTemplate.OverflowPolicy.valueOf(raw));
+            } catch (IllegalArgumentException ex) {
+                warnings.add("[discord.yml] Key 'templates." + id + ".overflow-policy' has invalid value '" + raw
+                        + "'. Fix: Use SPLIT_MESSAGE or TRUNCATE.");
+            }
+        }
+        if (sec.contains("content")) b.content(sec.getString("content", ""));
+        if (sec.contains("tts")) b.tts(sec.getBoolean("tts", false));
+        if (sec.contains("suppress-embeds")) b.suppressEmbeds(sec.getBoolean("suppress-embeds", false));
+        if (sec.contains("suppress-notifications")) b.suppressNotifications(sec.getBoolean("suppress-notifications", false));
+        if (sec.contains("mention-roles")) b.mentionRoles(List.copyOf(sec.getStringList("mention-roles")));
+        if (sec.contains("mention-users")) b.mentionUsers(List.copyOf(sec.getStringList("mention-users")));
+
+        if (sec.isConfigurationSection("author")) {
+            ConfigurationSection auth = sec.getConfigurationSection("author");
+            if (auth.contains("name")) b.authorName(auth.getString("name", ""));
+            if (auth.contains("url")) b.authorUrl(auth.getString("url", ""));
+            if (auth.contains("icon-url")) b.authorIconUrl(auth.getString("icon-url", ""));
+        }
+
+        if (sec.contains("color")) {
+            Integer c = parseColorValue(sec.getString("color"), "discord.yml", "templates." + id + ".color", warnings);
+            if (c != null) b.color(c);
+        }
+        if (sec.isConfigurationSection("rank-colors")) {
+            Map<String, Integer> rc = new LinkedHashMap<>(base.getRankColors());
+            ConfigurationSection rcSec = sec.getConfigurationSection("rank-colors");
+            for (String k : rcSec.getKeys(false)) {
+                Integer c = parseColorValue(rcSec.getString(k), "discord.yml", "templates." + id + ".rank-colors." + k, warnings);
+                if (c != null) rc.put(k, c);
+            }
+            b.rankColors(Map.copyOf(rc));
+        }
+
+        if (sec.contains("title")) b.title(sec.getString("title", ""));
+        if (sec.contains("title-url")) b.titleUrl(sec.getString("title-url", ""));
+        if (sec.contains("description")) b.description(sec.getString("description", ""));
+        if (sec.contains("include-timestamp")) b.includeTimestamp(sec.getBoolean("include-timestamp", true));
+        if (sec.contains("thumbnail-mode")) {
+            String raw = sec.getString("thumbnail-mode", "TOP_1_PLAYER").trim().toUpperCase();
+            try {
+                b.thumbnailMode(DiscordTemplate.ThumbnailMode.valueOf(raw));
+            } catch (IllegalArgumentException ex) {
+                warnings.add("[discord.yml] Key 'templates." + id + ".thumbnail-mode' has invalid value '" + raw
+                        + "'. Fix: Use NONE, TOP_1_PLAYER, or CUSTOM_URL.");
+            }
+        }
+        if (sec.contains("thumbnail-url")) b.thumbnailUrl(sec.getString("thumbnail-url", ""));
+        if (sec.contains("image-url")) b.imageUrl(sec.getString("image-url", ""));
+        if (sec.contains("field-title")) b.fieldTitle(sec.getString("field-title", "Leaderboard"));
+        if (sec.contains("inline-entry-fields")) b.inlineEntryFields(sec.getBoolean("inline-entry-fields", false));
+
+        if (sec.isConfigurationSection("entry-formats")) {
+            Map<String, String> formats = new LinkedHashMap<>(base.getEntryFormats());
+            ConfigurationSection efSec = sec.getConfigurationSection("entry-formats");
+            for (String k : efSec.getKeys(false)) {
+                if ("default".equalsIgnoreCase(k)) {
+                    b.defaultEntryFormat(efSec.getString(k));
+                } else {
+                    formats.put(k, efSec.getString(k));
+                }
+            }
+            b.entryFormats(Map.copyOf(formats));
+        } else if (sec.contains("entry-format")) {
+            b.defaultEntryFormat(sec.getString("entry-format"));
+        }
+
+        if (sec.contains("skipped-format")) b.skippedFormat(sec.getString("skipped-format", ""));
+        if (sec.contains("include-skipped")) b.includeSkipped(sec.getBoolean("include-skipped", true));
+        if (sec.contains("empty-message")) b.emptyMessage(sec.getString("empty-message", ""));
+        if (sec.contains("entry-embed-title")) b.entryEmbedTitle(sec.getString("entry-embed-title", ""));
+        if (sec.contains("entry-embed-description")) b.entryEmbedDescription(sec.getString("entry-embed-description", ""));
+        if (sec.contains("footer-text")) b.footerText(sec.getString("footer-text", ""));
+        else if (sec.contains("footer")) b.footerText(sec.getString("footer", ""));
+        if (sec.contains("footer-icon-url")) b.footerIconUrl(sec.getString("footer-icon-url", ""));
+
+        if (sec.contains("custom-fields")) {
+            List<DiscordTemplate.CustomField> cfs = new ArrayList<>();
+            for (Map<?, ?> rawMap : sec.getMapList("custom-fields")) {
+                String name = rawMap.get("name") != null ? String.valueOf(rawMap.get("name")) : "";
+                String val = rawMap.get("value") != null ? String.valueOf(rawMap.get("value")) : "";
+                boolean inline = rawMap.get("inline") instanceof Boolean bl && bl;
+                cfs.add(DiscordTemplate.CustomField.builder().name(name).value(val).inline(inline).build());
+            }
+            b.customFields(List.copyOf(cfs));
+        }
+
+        if (sec.contains("link-buttons")) {
+            List<DiscordTemplate.LinkButton> btns = new ArrayList<>();
+            for (Map<?, ?> rawMap : sec.getMapList("link-buttons")) {
+                String label = rawMap.get("label") != null ? String.valueOf(rawMap.get("label")) : "";
+                String url = rawMap.get("url") != null ? String.valueOf(rawMap.get("url")) : "";
+                String emoji = rawMap.get("emoji") != null ? String.valueOf(rawMap.get("emoji")) : "";
+                btns.add(DiscordTemplate.LinkButton.builder().label(label).url(url).emoji(emoji).build());
+            }
+            b.linkButtons(List.copyOf(btns));
+        }
+        return b.build();
+    }
+
+    private Integer parseColorValue(String raw, String file, String key, List<String> warnings) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String s = raw.trim();
+        Integer named = switch (s.toUpperCase()) {
+            case "GOLD" -> 0xFFD700;
+            case "RED" -> 0xE74C3C;
+            case "GREEN" -> 0x2ECC71;
+            case "BLUE" -> 0x3498DB;
+            case "AQUA" -> 0x1ABC9C;
+            case "YELLOW" -> 0xF1C40F;
+            case "PURPLE" -> 0x9B59B6;
+            case "ORANGE" -> 0xE67E22;
+            case "PINK" -> 0xE91E63;
+            case "WHITE" -> 0xFFFFFF;
+            case "GRAY", "GREY" -> 0x95A5A6;
+            case "BLACK" -> 0x000000;
+            case "BLURPLE", "DISCORD_BLURPLE" -> 0x5865F2;
+            default -> null;
+        };
+        if (named != null) {
+            return named;
+        }
+        if (s.startsWith("#")) {
+            try {
+                return Integer.parseInt(s.substring(1), 16) & 0xFFFFFF;
+            } catch (NumberFormatException ignored) {
+            }
         }
         try {
-            return Integer.parseInt(cleaned, 16) & 0xFFFFFF;
+            return Integer.parseInt(s) & 0xFFFFFF;
         } catch (NumberFormatException ex) {
-            warnings.add("[discord.yml] Key 'embed.color' has invalid hex color '" + raw
-                    + "'. Fix: Use '#RRGGBB' (e.g. '#FFD700'). Using '#FFD700'.");
-            return 0xFFD700;
+            warnings.add("[" + file + "] Key '" + key + "' has invalid color '" + raw
+                    + "'. Fix: Use '#RRGGBB', a named color (GOLD, RED, GREEN, BLURPLE), or a decimal integer.");
+            return null;
         }
     }
 
@@ -653,6 +862,13 @@ public final class ConfigManager {
         rawPodiums.set(base + ".conditions", def.getConditions().stream().map(ConditionSpec::getRaw).toList());
         rawPodiums.set(base + ".discord.enabled", def.isDiscordEnabled());
         rawPodiums.set(base + ".discord.webhooks", def.getDiscordWebhooks());
+        rawPodiums.set(base + ".discord.template", def.getDiscordTemplate());
+        if (def.getDiscordColor() != null) {
+            rawPodiums.set(base + ".discord.color", String.format("#%06X", def.getDiscordColor()));
+        }
+        rawPodiums.set(base + ".discord.thread-id", def.getDiscordThreadId());
+        rawPodiums.set(base + ".discord.thread-name", def.getDiscordThreadName());
+        rawPodiums.set(base + ".discord.applied-tags", def.getDiscordAppliedTags());
         if (def.getValueFormat() != null) {
             rawPodiums.set(base + ".value-format.grouping", def.getValueFormat().isGrouping());
             rawPodiums.set(base + ".value-format.decimals", def.getValueFormat().getDecimals());

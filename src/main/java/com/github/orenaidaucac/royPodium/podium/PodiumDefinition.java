@@ -31,6 +31,15 @@ public final class PodiumDefinition {
     @Builder.Default
     private final List<String> discordWebhooks = List.of();
     @Builder.Default
+    private final String discordTemplate = "";
+    private final Integer discordColor;
+    @Builder.Default
+    private final String discordThreadId = "";
+    @Builder.Default
+    private final String discordThreadName = "";
+    @Builder.Default
+    private final List<String> discordAppliedTags = List.of();
+    @Builder.Default
     private final ValueFormatSpec valueFormat = ValueFormatSpec.DEFAULT;
     /** Ordered map of rank expression ("1", "2", "4-10") -> list of console commands. */
     @Builder.Default

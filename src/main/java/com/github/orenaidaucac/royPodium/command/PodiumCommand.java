@@ -306,16 +306,21 @@ public final class PodiumCommand implements CommandExecutor, TabCompleter {
             configManager.getMessages().send(sender, "general.no-permission", "{prefix}&cYou do not have permission to use this command.");
             return;
         }
-        if (args.length < 3) {
+        if (args.length < 2) {
             configManager.getMessages().send(sender, "webhook.usage",
-                    "{prefix}&cUsage: /{label} webhook <preview|send> <podium> [webhook]",
+                    "{prefix}&cUsage: /{label} webhook <preview|send|validate> ...",
                     Map.of("label", label));
             return;
         }
         String mode = args[1].toLowerCase();
-        if (!"preview".equals(mode) && !"send".equals(mode)) {
+        if ("validate".equals(mode)) {
+            String tplOpt = args.length >= 3 ? args[2] : "all";
+            plugin.getDiscordManager().validateTemplates(sender, tplOpt);
+            return;
+        }
+        if (args.length < 3 || (!"preview".equals(mode) && !"send".equals(mode))) {
             configManager.getMessages().send(sender, "webhook.usage",
-                    "{prefix}&cUsage: /{label} webhook <preview|send> <podium> [webhook]",
+                    "{prefix}&cUsage: /{label} webhook <preview|send> <podium> [webhook] [template] | validate [template|all]",
                     Map.of("label", label));
             return;
         }
@@ -327,6 +332,7 @@ public final class PodiumCommand implements CommandExecutor, TabCompleter {
             return;
         }
         String webhookOpt = args.length >= 4 ? args[3] : null;
+        String templateOpt = args.length >= 5 ? args[4] : null;
         boolean sendLive = "send".equals(mode);
 
         scheduler.runGlobal(() -> {
@@ -336,7 +342,7 @@ public final class PodiumCommand implements CommandExecutor, TabCompleter {
             if (snapshot.getEntries().isEmpty() && snapshot.getSkippedEntries().isEmpty()) {
                 snapshot = createSampleSnapshot(def);
             }
-            plugin.getDiscordManager().runTest(sender, def, snapshot, webhookOpt, sendLive);
+            plugin.getDiscordManager().runTest(sender, def, snapshot, webhookOpt, templateOpt, sendLive);
         });
     }
 
@@ -409,7 +415,7 @@ public final class PodiumCommand implements CommandExecutor, TabCompleter {
                 return filterPrefix(List.of("list", "inspect", "clear"), args[1]);
             }
             if ("webhook".equalsIgnoreCase(args[0]) && sender.hasPermission("roypodium.webhook")) {
-                return filterPrefix(List.of("preview", "send"), args[1]);
+                return filterPrefix(List.of("preview", "send", "validate"), args[1]);
             }
         }
 
@@ -418,6 +424,14 @@ public final class PodiumCommand implements CommandExecutor, TabCompleter {
                 return filterPrefix(List.of("simulate", "execute"), args[2]);
             }
             if ("webhook".equalsIgnoreCase(args[0]) && sender.hasPermission("roypodium.webhook")) {
+                if ("validate".equalsIgnoreCase(args[1])) {
+                    List<String> tpls = new ArrayList<>();
+                    tpls.add("all");
+                    if (configManager.getDiscordConfig() != null) {
+                        tpls.addAll(configManager.getDiscordConfig().getTemplates().keySet());
+                    }
+                    return filterPrefix(tpls, args[2]);
+                }
                 return filterPrefix(new ArrayList<>(configManager.getPodiums().keySet()), args[2]);
             }
             if ("queue".equalsIgnoreCase(args[0]) && sender.hasPermission("roypodium.queue")) {
@@ -434,10 +448,18 @@ public final class PodiumCommand implements CommandExecutor, TabCompleter {
             }
         }
 
-        if (args.length == 4 && "webhook".equalsIgnoreCase(args[0]) && sender.hasPermission("roypodium.webhook")) {
+        if (args.length == 4 && "webhook".equalsIgnoreCase(args[0]) && sender.hasPermission("roypodium.webhook")
+                && !"validate".equalsIgnoreCase(args[1])) {
             var discordCfg = configManager.getDiscordConfig();
             if (discordCfg != null) {
                 return filterPrefix(new ArrayList<>(discordCfg.getWebhooks().keySet()), args[3]);
+            }
+        }
+        if (args.length == 5 && "webhook".equalsIgnoreCase(args[0]) && sender.hasPermission("roypodium.webhook")
+                && !"validate".equalsIgnoreCase(args[1])) {
+            var discordCfg = configManager.getDiscordConfig();
+            if (discordCfg != null) {
+                return filterPrefix(new ArrayList<>(discordCfg.getTemplates().keySet()), args[4]);
             }
         }
         return List.of();

@@ -13,12 +13,12 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 /**
- * Coordinates Discord Webhook payout notifications, test previews, cooldowns, and lifecycle.
+ * Coordinates Discord Webhook payout notifications, template resolution/validation,
+ * test previews, cooldowns, and async sender lifecycle.
  */
 public final class DiscordManager {
 
@@ -52,8 +52,9 @@ public final class DiscordManager {
             }
             ZoneId zone = resolveZone(def);
             for (DiscordConfig.WebhookProfile profile : targets) {
-                List<String> payloads = DiscordEmbedBuilder.buildPayloads(
-                        cfg, profile, def, snapshot, onlineCount, offlineCount, zone
+                DiscordTemplate tpl = resolveEffectiveTemplate(cfg, def, profile, null);
+                List<DiscordEmbedBuilder.WebhookPayload> payloads = DiscordEmbedBuilder.buildPayloads(
+                        cfg, profile, tpl, def, snapshot, onlineCount, offlineCount, zone
                 );
                 sender.enqueue(profile, payloads, cfg);
             }
@@ -69,10 +70,10 @@ public final class DiscordManager {
                         PodiumDefinition def,
                         PodiumSnapshot snapshot,
                         String webhookIdOpt,
+                        String templateIdOpt,
                         boolean sendLive) {
         DiscordConfig cfg = configManager.getDiscordConfig();
         var msgs = configManager.getMessages();
-
         if (cfg == null) {
             return;
         }
@@ -82,11 +83,14 @@ public final class DiscordManager {
         int offlineCount = snapshot.getEntries().size() - onlineCount;
 
         String targetName = resolveSingleProfileName(cfg, def, webhookIdOpt);
+        DiscordConfig.WebhookProfile profile = cfg.getWebhooks().get(targetName);
+        DiscordTemplate tpl = resolveEffectiveTemplate(cfg, def, profile, templateIdOpt);
+
         if (!sendLive) {
             msgs.send(feedbackTarget, "webhook.preview-header",
                     "&8&m----&r &9Discord Preview: {podium} &7({webhook}) &8&m----",
                     Map.of("podium", def.getId(), "webhook", targetName));
-            for (String line : DiscordEmbedBuilder.buildPreviewLines(cfg, def, snapshot, onlineCount, offlineCount, zone)) {
+            for (String line : DiscordEmbedBuilder.buildPreviewLines(cfg, profile, tpl, def, snapshot, onlineCount, offlineCount, zone)) {
                 msgs.send(feedbackTarget, "webhook.preview-line", "&7{line}",
                         Map.of(), Map.of("line", line));
             }
@@ -100,7 +104,6 @@ public final class DiscordManager {
             return;
         }
 
-        DiscordConfig.WebhookProfile profile = cfg.getWebhooks().get(targetName);
         if (profile == null) {
             msgs.send(feedbackTarget, "webhook.not-found",
                     "{prefix}&cWebhook profile '&e{webhook}&c' does not exist or has an invalid URL.",
@@ -108,7 +111,6 @@ public final class DiscordManager {
             return;
         }
 
-        // Enforce cooldown on live test send
         int cooldownSec = cfg.getTestCooldownSeconds();
         if (cooldownSec > 0) {
             String key = feedbackTarget instanceof Player p ? p.getUniqueId().toString() : "CONSOLE";
@@ -125,11 +127,11 @@ public final class DiscordManager {
         }
 
         msgs.send(feedbackTarget, "webhook.sending",
-                "{prefix}&7Sending test Discord webhook '&e{webhook}&7' for podium &e{podium}&7...",
-                Map.of("webhook", profile.getId(), "podium", def.getId()));
+                "{prefix}&7Sending test Discord webhook '&e{webhook}&7' (template '&b{template}&7') for podium &e{podium}&7...",
+                Map.of("webhook", profile.getId(), "template", tpl.getId(), "podium", def.getId()));
 
-        List<String> payloads = DiscordEmbedBuilder.buildPayloads(
-                cfg, profile, def, snapshot, onlineCount, offlineCount, zone
+        List<DiscordEmbedBuilder.WebhookPayload> payloads = DiscordEmbedBuilder.buildPayloads(
+                cfg, profile, tpl, def, snapshot, onlineCount, offlineCount, zone
         );
         sender.sendTestAsync(profile, payloads, cfg).thenAccept(res -> {
             Runnable reply = () -> {
@@ -151,6 +153,46 @@ public final class DiscordManager {
         });
     }
 
+    /**
+     * Validates one or all templates against Discord API limits and reports issues to {@code sender}.
+     */
+    public void validateTemplates(CommandSender sender, String templateOpt) {
+        DiscordConfig cfg = configManager.getDiscordConfig();
+        var msgs = configManager.getMessages();
+        if (cfg == null) {
+            return;
+        }
+        List<DiscordTemplate> targets = new ArrayList<>();
+        if (templateOpt == null || templateOpt.isBlank() || "all".equalsIgnoreCase(templateOpt)) {
+            targets.addAll(cfg.getTemplates().values());
+        } else {
+            DiscordTemplate t = cfg.getTemplates().get(templateOpt);
+            if (t == null) {
+                msgs.send(sender, "webhook.template-not-found",
+                        "{prefix}&cDiscord template '&e{template}&c' does not exist in discord.yml.",
+                        Map.of("template", templateOpt));
+                return;
+            }
+            targets.add(t);
+        }
+
+        int totalIssues = 0;
+        for (DiscordTemplate t : targets) {
+            List<String> issues = DiscordEmbedBuilder.validateTemplate(t);
+            if (!issues.isEmpty()) {
+                totalIssues += issues.size();
+                for (String issue : issues) {
+                    msgs.send(sender, "webhook.validate-issue", "&c- {issue}", Map.of(), Map.of("issue", issue));
+                }
+            }
+        }
+        if (totalIssues == 0) {
+            msgs.send(sender, "webhook.validate-ok",
+                    "{prefix}&aAll {count} template(s) passed Discord API limit validation.",
+                    Map.of("count", String.valueOf(targets.size())));
+        }
+    }
+
     public void reload() {
         testCooldowns.clear();
         DiscordConfig cfg = configManager.getDiscordConfig();
@@ -163,6 +205,25 @@ public final class DiscordManager {
         DiscordConfig cfg = configManager.getDiscordConfig();
         int drain = cfg != null ? cfg.getShutdownDrainSeconds() : 5;
         sender.shutdown(drain);
+    }
+
+    private DiscordTemplate resolveEffectiveTemplate(DiscordConfig cfg,
+                                                     PodiumDefinition def,
+                                                     DiscordConfig.WebhookProfile profile,
+                                                     String override) {
+        String chosen = null;
+        if (override != null && !override.isBlank()) {
+            chosen = override.trim();
+        } else if (def.getDiscordTemplate() != null && !def.getDiscordTemplate().isBlank()) {
+            chosen = def.getDiscordTemplate().trim();
+        } else if (profile != null && profile.getTemplate() != null && !profile.getTemplate().isBlank()) {
+            chosen = profile.getTemplate().trim();
+        }
+        DiscordTemplate tpl = cfg.resolveTemplate(chosen);
+        if (!DiscordEmbedBuilder.validateTemplate(tpl).isEmpty()) {
+            return cfg.getFallbackOrMinimal();
+        }
+        return tpl;
     }
 
     private ZoneId resolveZone(PodiumDefinition def) {

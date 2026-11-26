@@ -3,7 +3,7 @@
 # ==============================================================================
 # Supports MiniMessage (<gold>, <gradient:#ff0000:#00ff00>), Hex (&#RRGGBB),
 # and Legacy (&a, §a, &l) mixed together on the same line.
-config-version: 4
+config-version: 5
 
 prefix: "&8[&6RoyPodium&8] &r"
 
@@ -80,3 +80,6 @@ webhook:
   sending: "{prefix}&7Sending test Discord webhook '&e{webhook}&7' for podium &e{podium}&7..."
   send-success: "{prefix}&aTest webhook '&e{webhook}&a' sent successfully (HTTP &e{code}&a)."
   send-failed: "{prefix}&cFailed to send test webhook '&e{webhook}&c': &f{error}"
+  template-not-found: "{prefix}&cDiscord template '&e{template}&c' does not exist in discord.yml."
+  validate-ok: "{prefix}&aAll {count} template(s) passed Discord API limit validation."
+  validate-issue: "&c- {issue}"

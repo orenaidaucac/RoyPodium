@@ -49,8 +49,8 @@ public final class DiscordWebhookSender {
     /**
      * Enqueues webhook payloads asynchronously (fire-and-forget for scheduled payouts).
      */
-    public void enqueue(DiscordConfig.WebhookProfile profile, List<String> jsonPayloads, DiscordConfig cfg) {
-        if (profile == null || jsonPayloads == null || jsonPayloads.isEmpty()) {
+    public void enqueue(DiscordConfig.WebhookProfile profile, List<DiscordEmbedBuilder.WebhookPayload> payloads, DiscordConfig cfg) {
+        if (profile == null || payloads == null || payloads.isEmpty()) {
             return;
         }
         ExecutorService exec = this.executor;
@@ -58,8 +58,9 @@ public final class DiscordWebhookSender {
             return;
         }
         exec.submit(() -> {
-            for (String payload : jsonPayloads) {
-                SendResult res = sendBlocking(profile.getUrl(), profile.getMaskedUrl(), payload,
+            for (DiscordEmbedBuilder.WebhookPayload payload : payloads) {
+                String targetUrl = buildTargetUrl(profile.getUrl(), payload.threadId(), payload.hasComponents());
+                SendResult res = sendBlocking(targetUrl, profile.getMaskedUrl(), payload.json(),
                         cfg.getTimeoutSeconds(), cfg.getMaxRetries(), cfg.getMinIntervalMs());
                 if (!res.success()) {
                     logger.warning("Discord webhook '" + profile.getId() + "' (" + profile.getMaskedUrl()
@@ -73,7 +74,7 @@ public final class DiscordWebhookSender {
      * Sends webhook payloads asynchronously and returns a future for admin test command feedback.
      */
     public CompletableFuture<SendResult> sendTestAsync(DiscordConfig.WebhookProfile profile,
-                                                       List<String> jsonPayloads,
+                                                       List<DiscordEmbedBuilder.WebhookPayload> payloads,
                                                        DiscordConfig cfg) {
         ExecutorService exec = this.executor;
         if (exec == null || exec.isShutdown()) {
@@ -81,8 +82,9 @@ public final class DiscordWebhookSender {
         }
         return CompletableFuture.supplyAsync(() -> {
             SendResult last = SendResult.ok(204);
-            for (String payload : jsonPayloads) {
-                last = sendBlocking(profile.getUrl(), profile.getMaskedUrl(), payload,
+            for (DiscordEmbedBuilder.WebhookPayload payload : payloads) {
+                String targetUrl = buildTargetUrl(profile.getUrl(), payload.threadId(), payload.hasComponents());
+                last = sendBlocking(targetUrl, profile.getMaskedUrl(), payload.json(),
                         cfg.getTimeoutSeconds(), cfg.getMaxRetries(), cfg.getMinIntervalMs());
                 if (!last.success()) {
                     return last;
@@ -90,6 +92,19 @@ public final class DiscordWebhookSender {
             }
             return last;
         }, exec);
+    }
+
+    static String buildTargetUrl(String baseUrl, String threadId, boolean withComponents) {
+        StringBuilder sb = new StringBuilder(baseUrl);
+        char sep = baseUrl.contains("?") ? '&' : '?';
+        if (threadId != null && !threadId.isBlank()) {
+            sb.append(sep).append("thread_id=").append(threadId.trim());
+            sep = '&';
+        }
+        if (withComponents) {
+            sb.append(sep).append("with_components=true");
+        }
+        return sb.toString();
     }
 
     SendResult sendBlocking(String url,

@@ -280,7 +280,18 @@ public final class GuiManager {
 
         setConfiguredItem(gui, "menus.podium-edit.items.discord-toggle", 22, Material.BELL, "&9Discord Webhook", ph,
                 e -> {
-                    configManager.savePodium(copyPodiumDiscord(def, !def.isDiscordEnabled()));
+                    configManager.savePodium(copyPodiumDiscord(def, !def.isDiscordEnabled(), def.getDiscordTemplate()));
+                    playSound(player, "save");
+                    openPodiumEdit(player, podiumId);
+                });
+
+        setConfiguredItem(gui, "menus.podium-edit.items.discord-template", 23, Material.BOOKSHELF, "&9Discord Template", ph,
+                e -> {
+                    var dCfg = configManager.getDiscordConfig();
+                    if (dCfg == null || dCfg.getTemplates().isEmpty()) return;
+                    List<String> tpls = new ArrayList<>(dCfg.getTemplates().keySet());
+                    String next = tpls.get((tpls.indexOf(def.getDiscordTemplate()) + 1) % tpls.size());
+                    configManager.savePodium(copyPodiumDiscord(def, def.isDiscordEnabled(), next));
                     playSound(player, "save");
                     openPodiumEdit(player, podiumId);
                 });
@@ -303,7 +314,7 @@ public final class GuiManager {
                                             .rank(1).playerName(player.getName()).value("100").online(true).commands(List.of()).build()))
                                     .build();
                         }
-                        discordManager.runTest(player, def, snap, null, sendLive);
+                        discordManager.runTest(player, def, snap, null, null, sendLive);
                     });
                 });
 
@@ -851,6 +862,9 @@ public final class GuiManager {
         String discordStatus = def.isDiscordEnabled()
                 ? cfg.getString("labels.enabled-true", "&aEnabled")
                 : cfg.getString("labels.enabled-false", "&cDisabled");
+        String discordTpl = (def.getDiscordTemplate() == null || def.getDiscordTemplate().isBlank())
+                ? "default"
+                : def.getDiscordTemplate();
         return Map.ofEntries(
                 Map.entry("id", def.getId()),
                 Map.entry("display_name", ColorUtil.colorize(def.getDisplayName())),
@@ -861,7 +875,8 @@ public final class GuiManager {
                 Map.entry("value_papi", def.getValuePlaceholder()),
                 Map.entry("rank_count", String.valueOf(def.getRankRules().size())),
                 Map.entry("condition_count", String.valueOf(def.getConditions() == null ? 0 : def.getConditions().size())),
-                Map.entry("discord_status", discordStatus)
+                Map.entry("discord_status", discordStatus),
+                Map.entry("discord_template", discordTpl)
         );
     }
 
@@ -900,6 +915,11 @@ public final class GuiManager {
                 .conditions(src.getConditions())
                 .discordEnabled(src.isDiscordEnabled())
                 .discordWebhooks(src.getDiscordWebhooks())
+                .discordTemplate(src.getDiscordTemplate())
+                .discordColor(src.getDiscordColor())
+                .discordThreadId(src.getDiscordThreadId())
+                .discordThreadName(src.getDiscordThreadName())
+                .discordAppliedTags(src.getDiscordAppliedTags())
                 .valueFormat(src.getValueFormat())
                 .rankRules(rankRules)
                 .build();
@@ -918,12 +938,17 @@ public final class GuiManager {
                 .conditions(List.copyOf(conditions))
                 .discordEnabled(src.isDiscordEnabled())
                 .discordWebhooks(src.getDiscordWebhooks())
+                .discordTemplate(src.getDiscordTemplate())
+                .discordColor(src.getDiscordColor())
+                .discordThreadId(src.getDiscordThreadId())
+                .discordThreadName(src.getDiscordThreadName())
+                .discordAppliedTags(src.getDiscordAppliedTags())
                 .valueFormat(src.getValueFormat())
                 .rankRules(src.getRankRules())
                 .build();
     }
 
-    private PodiumDefinition copyPodiumDiscord(PodiumDefinition src, boolean discordEnabled) {
+    private PodiumDefinition copyPodiumDiscord(PodiumDefinition src, boolean discordEnabled, String discordTemplate) {
         return PodiumDefinition.builder()
                 .id(src.getId())
                 .enabled(src.isEnabled())
@@ -936,6 +961,11 @@ public final class GuiManager {
                 .conditions(src.getConditions())
                 .discordEnabled(discordEnabled)
                 .discordWebhooks(src.getDiscordWebhooks())
+                .discordTemplate(discordTemplate)
+                .discordColor(src.getDiscordColor())
+                .discordThreadId(src.getDiscordThreadId())
+                .discordThreadName(src.getDiscordThreadName())
+                .discordAppliedTags(src.getDiscordAppliedTags())
                 .valueFormat(src.getValueFormat())
                 .rankRules(src.getRankRules())
                 .build();

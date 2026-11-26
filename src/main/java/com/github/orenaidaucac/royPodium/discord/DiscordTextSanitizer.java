@@ -11,13 +11,28 @@ public final class DiscordTextSanitizer {
     }
 
     /**
-     * Strips all Minecraft Legacy, Hex, and MiniMessage tags.
+     * Strips all Minecraft Legacy, Hex, and MiniMessage tags while preserving Discord {@code <t:...>} timestamps.
      */
     public static String stripMinecraft(String input) {
         if (input == null || input.isEmpty()) {
             return "";
         }
-        return ColorUtil.strip(input);
+        // Protect Discord dynamic timestamps (<t:123456:R>) from MiniMessage tag parsing
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("<t:(-?\\d+)(?::([tTdDfFR]))?>").matcher(input);
+        java.util.List<String> preserved = new java.util.ArrayList<>();
+        StringBuilder sb = new StringBuilder(input.length());
+        while (m.find()) {
+            String token = "ROYTS" + preserved.size() + "END";
+            preserved.add(m.group(0));
+            m.appendReplacement(sb, token);
+        }
+        m.appendTail(sb);
+
+        String stripped = ColorUtil.strip(sb.toString());
+        for (int i = 0; i < preserved.size(); i++) {
+            stripped = stripped.replace("ROYTS" + i + "END", preserved.get(i));
+        }
+        return stripped;
     }
 
     /**

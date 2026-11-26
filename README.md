@@ -268,12 +268,15 @@ Send rich, customizable **Discord Embed** notifications automatically after each
 <!-- Screenshot Placeholder: Discord Embed notification showing Top Players -->
 
 ### Key Capabilities
-- **Multiple Webhooks & Per-Podium Control (`discord.yml` & `podiums.yml`):** Enable/disable globally or per podium, use a default webhook, or route specific podiums to different Discord channels.
+- **Multiple Webhooks & Named Templates (`discord.yml` & `podiums.yml`):** Define unlimited named templates (`default`, `compact`, `detailed`, `showcase`, `minimal`) with `extends` inheritance, per-podium or per-webhook assignment, and automatic fallback to a minimal template on error.
+- **Full Discord Webhook & Embed API:** Customize `content`, `tts`, message flags (`suppress-embeds`, `suppress-notifications`), `author` (`name`, `url`, `icon-url`), `title` & `title-url`, `description`, `thumbnail`, `image`, `footer` & `footer-icon-url`, `inline` custom fields, Link Buttons (`link-buttons`), Forum/Thread targeting (`thread-id`, `thread-name`, `applied-tags`), conditional `rank-colors`, and Discord dynamic timestamps (`{timestamp_relative}`, `{timestamp_full}`, etc.).
+- **Three Layout Modes & Auto-Splitting:** Choose `LIST_FIELD` (grouped list), `PER_ENTRY_FIELD` (individual inline/block fields), or `PER_ENTRY_EMBED` (individual embeds per winner). Exceeding Discord limits is handled automatically via `SPLIT_MESSAGE` or `TRUNCATE`.
 - **Display-Only Value Formatting (`value-format` in `podiums.yml`):** Format raw PlaceholderAPI numbers with thousands separators (`grouping`), fixed decimal places (`decimals`), compact notation (`compact`: `K`/`M`/`B`/`T`), `prefix`/`suffix`, and safe non-numeric fallback—without affecting reward conditions or commands.
 - **Zero Impact on Payouts:** Webhooks are dispatched on a dedicated asynchronous background queue with HTTP `429` rate-limit handling. Network or Discord errors never delay or cancel player rewards.
-- **Test & Preview Command:**
-  - `/roypodium webhook preview <podium> [webhook]` — Preview the rendered Discord message in chat without sending it.
-  - `/roypodium webhook send <podium> [webhook]` — Send a live test embed (with anti-spam cooldown) without awarding any rewards.
+- **Test, Preview & Validate Commands:**
+  - `/roypodium webhook preview <podium> [webhook] [template]` — Preview the rendered Discord message in chat without sending it.
+  - `/roypodium webhook send <podium> [webhook] [template]` — Send a live test embed (with anti-spam cooldown) without awarding any rewards.
+  - `/roypodium webhook validate [template|all]` — Validate templates against Discord's official character, field, and button limits.
 
 > [!CAUTION]
 > **Webhook URL Security:** Never share your Discord Webhook URL. RoyPodium validates that URLs use `https://` on official Discord domains, blocks internal/private IPs (anti-SSRF), masks URLs in all logs and error messages, strips Minecraft color codes, and neutralizes `@everyone`/`@here`/user mentions.
@@ -328,7 +331,8 @@ Main command: `/roypodium` (built-in alias: `/podium`, plus any custom `command-
 | `/roypodium status` | View PlaceholderAPI, podiums, schedules, and queue status | `roypodium.status` | `op` |
 | `/roypodium editor` | Open the in-game TriumphGUI editor | `roypodium.editor` | `op` |
 | `/roypodium test <podium\|all> [simulate\|execute]` | Simulate or execute a podium payout immediately | `roypodium.test` | `op` |
-| `/roypodium webhook <preview\|send> <podium> [webhook]` | Preview or send a test Discord webhook | `roypodium.webhook` | `op` |
+| `/roypodium webhook <preview\|send> <podium> [webhook] [template]` | Preview or send a test Discord webhook | `roypodium.webhook` | `op` |
+| `/roypodium webhook validate [template\|all]` | Validate Discord templates against API limits | `roypodium.webhook` | `op` |
 | `/roypodium queue list [page]` | List players with pending offline rewards | `roypodium.queue` | `op` |
 | `/roypodium queue inspect <player\|uuid>` | Inspect pending rewards for a player | `roypodium.queue` | `op` |
 | `/roypodium queue clear <player\|uuid\|all>` | Clear pending rewards | `roypodium.queue` | `op` |
@@ -362,6 +366,7 @@ If `conditions:` are configured on that podium, `/roypodium test <podium> simula
 ## 📝 Update Changelog
 
 ### Latest Update (`2026.1`)
+- **Expanded** **Discord Webhooks** to support Discord's full official Webhook & Embed API: named `templates` with `extends` inheritance, `LIST_FIELD` / `PER_ENTRY_FIELD` / `PER_ENTRY_EMBED` layouts, `content`, `tts`, `flags` (`suppress-embeds`, `suppress-notifications`), `thread-id` / `thread-name` / `applied-tags`, Link Buttons (`with_components=true`), `author`/`image`/`footer-icon-url`/`inline` fields, conditional `rank-colors`, dynamic `<t:...>` timestamps, `/roypodium webhook validate`, and GUI template selector.
 - **Added** **Discord Webhook** payout notifications (`discord.yml`, per-podium `discord` & `value-format` in `podiums.yml`), official Discord Embed limit splitting, SSRF/URL-masking/mention-escape security, async rate-limit handling, `/roypodium webhook <preview|send>`, and GUI toggle/test buttons.
 - **Added** `SPECIFIC_DATES` schedule frequency in `schedules.yml` supporting exact date-times (`YYYY-MM-DD HH:mm:ss`), `*` wildcards for recurring dates, multiple times per day, `short-month-policy` (`SKIP_MONTH` / `LAST_DAY`), DST-safe evaluation, and an in-game GUI date editor (`schedule-dates`).
 - **Added** anonymous **bStats** metrics integration (Plugin ID `35686`, relocated & Folia-safe) with 7 low-cardinality custom charts and full opt-out support.

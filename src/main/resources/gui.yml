@@ -4,7 +4,7 @@
 # Every GUI title, slot, material, item name, lore, sound, and label can be
 # customized or translated here without touching code.
 # Supports MiniMessage, Hex (&#RRGGBB), and Legacy (&a, §a) mixed in one line.
-config-version: 4
+config-version: 5
 
 sounds:
   click: "UI_BUTTON_CLICK"
@@ -161,6 +161,13 @@ menus:
         lore:
           - "&7Status: {discord_status}"
           - "&eClick to toggle for this podium"
+      discord-template:
+        slot: 23
+        material: "BOOKSHELF"
+        name: "&9Discord Template"
+        lore:
+          - "&7Current: &b{discord_template}"
+          - "&eClick to cycle templates"
       discord-test:
         slot: 24
         material: "PAPER"

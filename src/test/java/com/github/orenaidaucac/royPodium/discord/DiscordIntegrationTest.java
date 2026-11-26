@@ -20,6 +20,24 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class DiscordIntegrationTest {
 
+    private DiscordConfig baseConfig() {
+        return DiscordConfig.builder()
+                .enabled(true)
+                .defaultWebhook("default")
+                .defaultTemplate("default")
+                .fallbackTemplate("minimal")
+                .webhooks(Map.of())
+                .templates(Map.of())
+                .statusOnline("Delivered")
+                .statusOffline("Queued")
+                .statusSkipped("Skipped ({reason})")
+                .rankIcons(Map.of("1", "🥇"))
+                .defaultRankIcon("#{rank}")
+                .playerAvatarEnabled(true)
+                .playerAvatarUrlTemplate("https://mc-heads.net/avatar/{player}/128")
+                .build();
+    }
+
     @Test
     void valueFormatSpecHandlesNumbersCompactNegativeHugeAndNonNumeric() {
         ValueFormatSpec standard = ValueFormatSpec.builder()
@@ -66,26 +84,13 @@ class DiscordIntegrationTest {
 
     @Test
     void embedBuilderSplitsLongLeaderboardsAndEnforcesAllowedMentions() {
-        DiscordConfig cfg = DiscordConfig.builder()
-                .enabled(true)
-                .defaultWebhook("default")
-                .webhooks(Map.of())
-                .statusOnline("Delivered")
-                .statusOffline("Queued")
-                .statusSkipped("Skipped ({reason})")
-                .rankIcons(Map.of("1", "🥇"))
-                .defaultRankIcon("#{rank}")
-                .embedColor(0xFFD700)
-                .embedTitle("&6{podium_name}")
-                .embedDescription("<aqua>Date: {date}</aqua>")
-                .includeTimestamp(true)
-                .thumbnailMode(DiscordConfig.ThumbnailMode.NONE)
-                .fieldTitle("Leaderboard")
-                .entryFormat("{rank_icon} **#{rank}** {player} - {value} ({status})")
-                .skippedFormat("{rank_icon} **#{rank}** {player} - {value} (Skipped: {reason})")
-                .includeSkipped(true)
-                .emptyMessage("Empty")
-                .footer("Footer {total_count}")
+        DiscordConfig cfg = baseConfig();
+        DiscordTemplate tpl = DiscordTemplate.builder()
+                .id("default")
+                .layoutMode(DiscordTemplate.LayoutMode.LIST_FIELD)
+                .overflowPolicy(DiscordTemplate.OverflowPolicy.SPLIT_MESSAGE)
+                .title("&6{podium_name}")
+                .description("<aqua>Date: {date} {timestamp_relative}</aqua>")
                 .build();
 
         PodiumDefinition def = PodiumDefinition.builder()
@@ -109,14 +114,107 @@ class DiscordIntegrationTest {
                         .rank(61).playerName("LowPlayer").value("1").reason("Failed >= 5").build()))
                 .build();
 
-        List<String> payloads = DiscordEmbedBuilder.buildPayloads(cfg, null, def, snapshot, 30, 30, ZoneId.of("UTC"));
+        List<DiscordEmbedBuilder.WebhookPayload> payloads = DiscordEmbedBuilder.buildPayloads(
+                cfg, null, tpl, def, snapshot, 30, 30, ZoneId.of("UTC")
+        );
         assertFalse(payloads.isEmpty());
-        for (String json : payloads) {
+        for (var p : payloads) {
+            String json = p.json();
             assertTrue(json.contains("\"allowed_mentions\":{\"parse\":[]}"));
             assertFalse(json.contains("&c"));
             assertFalse(json.contains("<aqua>"));
             assertFalse(json.contains("@everyone"));
         }
+        assertTrue(payloads.get(0).json().contains("<t:"));
+    }
+
+    @Test
+    void supportsFullCapabilitiesThreadsForumButtonsFlagsAndOmitsInvalidUrls() {
+        DiscordConfig cfg = baseConfig();
+        DiscordTemplate tpl = DiscordTemplate.builder()
+                .id("full")
+                .layoutMode(DiscordTemplate.LayoutMode.PER_ENTRY_FIELD)
+                .inlineEntryFields(true)
+                .content("Payout alert!")
+                .tts(true)
+                .suppressNotifications(true)
+                .mentionRoles(List.of("123456789012345678"))
+                .authorName("RoyMC")
+                .authorUrl("not-a-valid-url") // should be omitted safely
+                .titleUrl("https://example.com/leaderboards")
+                .imageUrl("https://example.com/banner.png")
+                .footerIconUrl("invalid-url") // should be omitted safely
+                .linkButtons(List.of(
+                        DiscordTemplate.LinkButton.builder().label("View Web").url("https://example.com").emoji("🏆").build(),
+                        DiscordTemplate.LinkButton.builder().label("Bad").url("ftp://bad").build() // omitted
+                ))
+                .build();
+
+        PodiumDefinition def = PodiumDefinition.builder()
+                .id("kills")
+                .displayName("Top Kills")
+                .discordThreadName("Weekly Kills - {date}")
+                .discordAppliedTags(List.of("987654321098765432"))
+                .build();
+
+        PodiumSnapshot snap = PodiumSnapshot.builder()
+                .podiumId("kills")
+                .displayName("Top Kills")
+                .payoutId("p@2")
+                .capturedAt(Instant.now())
+                .entries(List.of(
+                        PodiumSnapshot.Entry.builder().rank(1).playerName("Steve").value("50").online(true).commands(List.of()).build()
+                ))
+                .build();
+
+        List<DiscordEmbedBuilder.WebhookPayload> payloads = DiscordEmbedBuilder.buildPayloads(
+                cfg, null, tpl, def, snap, 1, 0, ZoneId.of("UTC")
+        );
+        assertEquals(1, payloads.size());
+        var p = payloads.get(0);
+        assertTrue(p.hasComponents());
+        assertTrue(p.json().contains("\"tts\":true"));
+        assertTrue(p.json().contains("\"flags\":4096"));
+        assertTrue(p.json().contains("\"thread_name\":\"Weekly Kills"));
+        assertTrue(p.json().contains("\"applied_tags\":[\"987654321098765432\"]"));
+        assertTrue(p.json().contains("\"roles\":[\"123456789012345678\"]"));
+        assertTrue(p.json().contains("\"inline\":true"));
+        assertTrue(p.json().contains("\"style\":5"));
+        assertFalse(p.json().contains("not-a-valid-url"));
+        assertFalse(p.json().contains("ftp://bad"));
+
+        String targetUrl = DiscordWebhookSender.buildTargetUrl("https://discord.com/api/webhooks/1/tok", "555666", p.hasComponents());
+        assertTrue(targetUrl.contains("thread_id=555666"));
+        assertTrue(targetUrl.contains("with_components=true"));
+    }
+
+    @Test
+    void supportsPerEntryEmbedAndTemplateLimitValidation() {
+        DiscordConfig cfg = baseConfig();
+        DiscordTemplate showcase = DiscordTemplate.builder()
+                .id("showcase")
+                .layoutMode(DiscordTemplate.LayoutMode.PER_ENTRY_EMBED)
+                .rankColors(Map.of("1", 0xFFD700))
+                .build();
+
+        PodiumDefinition def = PodiumDefinition.builder().id("bal").displayName("Top Balance").build();
+        PodiumSnapshot snap = PodiumSnapshot.builder()
+                .podiumId("bal").displayName("Top Balance").payoutId("p@3").capturedAt(Instant.now())
+                .entries(List.of(
+                        PodiumSnapshot.Entry.builder().rank(1).playerName("Alice").value("500").online(true).commands(List.of()).build(),
+                        PodiumSnapshot.Entry.builder().rank(2).playerName("Bob").value("200").online(false).commands(List.of()).build()
+                )).build();
+
+        var payloads = DiscordEmbedBuilder.buildPayloads(cfg, null, showcase, def, snap, 1, 1, ZoneId.of("UTC"));
+        assertEquals(1, payloads.size());
+        assertTrue(payloads.get(0).json().contains("Rank #1"));
+        assertTrue(payloads.get(0).json().contains("Rank #2"));
+
+        DiscordTemplate oversized = DiscordTemplate.builder()
+                .id("bad")
+                .title("x".repeat(300))
+                .build();
+        assertFalse(DiscordEmbedBuilder.validateTemplate(oversized).isEmpty());
     }
 
     @Test
